@@ -32,6 +32,8 @@ def inverse_kinematics(x, y):
 def is_reachable(x, y):
     return 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0
 
+def go_home():
+    return inverse_kinematics(0.5, 1)
 # --- TEST loop ---
 if __name__ == "__main__":
     print("SpiderCam IK controller")
