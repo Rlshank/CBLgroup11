@@ -9,3 +9,4 @@ while True:
     x = data["joystick"]["x"]
     y = data["joystick"]["y"]
     print(f"X: {x}, Y: {y}")
+    
