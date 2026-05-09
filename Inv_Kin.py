@@ -26,4 +26,3 @@ def inverse_kinematics(des_x, des_y):
 
     prev_pos = des_pos.copy()
     return dtheta1, dtheta2
-
