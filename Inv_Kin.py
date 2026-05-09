@@ -1,8 +1,9 @@
 import numpy as np
-spool_r = 0.1
-anchor_1 = np.array([0.0, 1.0])
-anchor_2 = np.array([1.0, 1.0])
-prev_pos = np.array([0.5, 1.0])
+spool_r = 0.1                       # radius of the spool in meters
+anchor_1 = np.array([0.0, 1.0])     # position of the first anchor point in meters
+anchor_2 = np.array([1.0, 1.0])     # position of the second anchor point in meters
+
+prev_pos = np.array([0.5, 1.0])     # previous position in meters
 
 
 def inverse_kinematics(des_x, des_y):
@@ -25,4 +26,4 @@ def inverse_kinematics(des_x, des_y):
     dtheta2 = float(np.degrees(dL2 / spool_r))
 
     prev_pos = des_pos.copy()
-    return dtheta1, dtheta2
+    return dtheta1, dtheta2   # Returns tuple 
