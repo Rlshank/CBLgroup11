@@ -1,0 +1,82 @@
+import numpy as np
+import serial
+import struct
+import time
+
+# --- CONFIG ---
+SPAN         = 1.0
+SPOOL_RADIUS = 0.02
+MAX_SPEED    = 0.5
+DEADZONE     = 0.08
+ANCHORS      = np.array([[0.0, 0.0], [SPAN, 0.0]])
+
+ser_motor = serial.Serial('/dev/ttyUSB0', 115200)  # motors/encoders
+ser_joy   = serial.Serial('/dev/ttyUSB1', 115200)  # Arduino joystick
+
+# --- Forward kinematics: cable lengths → camera position ---
+def forward_kinematics(l1, l2):
+    x = (l1**2 - l2**2 + SPAN**2) / (2 * SPAN)
+    y_sq = l1**2 - x**2
+    y = np.sqrt(np.maximum(y_sq, 0))
+    return np.array([x, y])
+
+# --- IVK: camera position + velocity → motor omega ---
+def inverse_vk(cam_pos, cam_vel):
+    diff   = cam_pos - ANCHORS
+    l      = np.linalg.norm(diff, axis=1, keepdims=True)
+    J      = diff / l
+    l_dots = J @ cam_vel
+    return l_dots / SPOOL_RADIUS
+
+def send_omega(omega):
+    ser_motor.write(struct.pack('ff', float(omega[0]), float(omega[1])))
+
+def read_cable_lengths():
+    if ser_motor.in_waiting >= 8:
+        buf = ser_motor.read(8)
+        l1, l2 = struct.unpack('ff', buf)
+        return l1, l2
+    return None
+
+def read_joystick():
+    """
+    Expects Arduino to send two raw 10-bit ints (0–1023) as 'X,Y\n'
+    e.g. Serial.println(String(analogRead(VRX)) + "," + String(analogRead(VRY)));
+    """
+    if ser_joy.in_waiting > 0:
+        try:
+            line = ser_joy.readline().decode().strip()
+            x_raw, y_raw = map(int, line.split(','))
+            # Normalise to -1.0 … +1.0
+            vx = (x_raw - 512) / 512.0
+            vy = (y_raw - 512) / 512.0
+            return vx, vy
+        except Exception:
+            pass
+    return 0.0, 0.0
+
+cam_pos = np.array([SPAN / 2, 1.0])
+dt = 0.005
+
+while True:
+    t0 = time.perf_counter()
+
+    # 1. Get camera position from encoders
+    lengths = read_cable_lengths()
+    if lengths is not None:
+        l1, l2 = lengths
+        cam_pos = forward_kinematics(l1, l2)
+
+    # 2. Joystick → camera velocity
+    vx, vy = read_joystick()
+    if abs(vx) < DEADZONE: vx = 0.0
+    if abs(vy) < DEADZONE: vy = 0.0
+    cam_vel = np.array([vx * MAX_SPEED, vy * MAX_SPEED])
+
+    # 3. IVK → send omega
+    omega = inverse_vk(cam_pos, cam_vel)
+    send_omega(omega)
+
+    elapsed = time.perf_counter() - t0
+    if elapsed < dt:
+        time.sleep(dt - elapsed)
