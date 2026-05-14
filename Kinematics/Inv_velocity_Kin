@@ -39,17 +39,14 @@ def read_cable_lengths():
     return None
 
 def read_joystick():
-    """
-    Expects Arduino to send two raw 10-bit ints (0–1023) as 'X,Y\n'
-    e.g. Serial.println(String(analogRead(VRX)) + "," + String(analogRead(VRY)));
-    """
     if ser_joy.in_waiting > 0:
         try:
             line = ser_joy.readline().decode().strip()
             x_raw, y_raw = map(int, line.split(','))
             # Normalise to -1.0 … +1.0
-            vx = (x_raw - 512) / 512.0
-            vy = (y_raw - 512) / 512.0
+            # to this
+            vx = (x_raw - 2048) / 2048.0
+            vy = (y_raw - 2048) / 2048.0
             return vx, vy
         except Exception:
             pass
