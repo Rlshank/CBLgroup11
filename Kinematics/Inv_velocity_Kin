@@ -4,16 +4,22 @@ import struct
 import time
 
 # --- CONFIG ---
-SPAN         = 1.0
+SPAN = 1.0
 SPOOL_RADIUS = 0.02
-MAX_SPEED    = 0.5
-DEADZONE     = 0.08
-ANCHORS      = np.array([[0.0, 0.0], [SPAN, 0.0]])
+MAX_SPEED = 0.5
+DEADZONE = 0.08
+ANCHORS = np.array([[0.0, 0.0], [SPAN, 0.0]])
 
-ser_motor = serial.Serial('/dev/ttyUSB0', 115200)  # motors/encoders
-ser_joy   = serial.Serial('/dev/ttyUSB1', 115200)  # Arduino joystick
+# Single serial connection to ESP32
+ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0)
+
+# --- Packet headers ---
+HEADER_CMD = 0xFF   # PC  → ESP32 : motor omegas   (9 bytes total)
+HEADER_SENSOR = 0xFE   # ESP32 → PC  : l1, l2, vx, vy (17 bytes total)
 
 # --- Forward kinematics: cable lengths → camera position ---
+
+
 def forward_kinematics(l1, l2):
     x = (l1**2 - l2**2 + SPAN**2) / (2 * SPAN)
     y_sq = l1**2 - x**2
@@ -21,59 +27,77 @@ def forward_kinematics(l1, l2):
     return np.array([x, y])
 
 # --- IVK: camera position + velocity → motor omega ---
+
+
 def inverse_vk(cam_pos, cam_vel):
-    diff   = cam_pos - ANCHORS
-    l      = np.linalg.norm(diff, axis=1, keepdims=True)
-    J      = diff / l
+    diff = cam_pos - ANCHORS
+    l = np.linalg.norm(diff, axis=1, keepdims=True)
+    J = diff / l
     l_dots = J @ cam_vel
     return l_dots / SPOOL_RADIUS
 
-def send_omega(omega):
-    ser_motor.write(struct.pack('ff', float(omega[0]), float(omega[1])))
 
-def read_cable_lengths():
-    if ser_motor.in_waiting >= 8:
-        buf = ser_motor.read(8)
-        l1, l2 = struct.unpack('ff', buf)
-        return l1, l2
+def send_omega(omega):
+    # 1 header byte + 2 floats = 9 bytes
+    packet = struct.pack('Bff', HEADER_CMD, float(omega[0]), float(omega[1]))
+    ser.write(packet)
+
+
+# Persistent read buffer — accumulates bytes across loop iterations
+_buf = bytearray()
+
+
+def read_sensor_packet():
+    """
+    Returns (l1, l2, vx, vy) if a complete 0xFE packet is available,
+    otherwise None. Consumes bytes from the shared buffer.
+    """
+    global _buf
+    _buf += ser.read(ser.in_waiting or 1)
+
+    # Scan for the sensor header
+    while len(_buf) >= 17:
+        idx = _buf.find(HEADER_SENSOR)
+        if idx == -1:
+            _buf.clear()
+            return None
+        if idx > 0:
+            del _buf[:idx]          # discard garbage before header
+        if len(_buf) < 17:
+            break                   # wait for the rest of the packet
+        packet = _buf[1:17]         # 16 payload bytes after header
+        del _buf[:17]
+        l1, l2, vx, vy = struct.unpack('ffff', packet)
+        return l1, l2, vx, vy
+
     return None
 
-def read_joystick():
-    if ser_joy.in_waiting > 0:
-        try:
-            line = ser_joy.readline().decode().strip()
-            x_raw, y_raw = map(int, line.split(','))
-            # Normalise to -1.0 … +1.0
-            # to this
-            vx = (x_raw - 2048) / 2048.0
-            vy = (y_raw - 2048) / 2048.0
-            return vx, vy
-        except Exception:
-            pass
-    return 0.0, 0.0
 
+# --- Main loop ---
 cam_pos = np.array([SPAN / 2, 1.0])
 dt = 0.005
 
 while True:
     t0 = time.perf_counter()
 
-    # 1. Get camera position from encoders
-    lengths = read_cable_lengths()
-    if lengths is not None:
-        l1, l2 = lengths
+    # 1. Read sensor packet from ESP32 (cable lengths + joystick)
+    data = read_sensor_packet()
+    if data is not None:
+        l1, l2, vx_raw, vy_raw = data
         cam_pos = forward_kinematics(l1, l2)
+    else:
+        vx_raw, vy_raw = 0.0, 0.0
 
-    # 2. Joystick → camera velocity
-    vx, vy = read_joystick()
-    if abs(vx) < DEADZONE: vx = 0.0
-    if abs(vy) < DEADZONE: vy = 0.0
+    # 2. Apply deadzone to joystick values
+    vx = 0.0 if abs(vx_raw) < DEADZONE else vx_raw
+    vy = 0.0 if abs(vy_raw) < DEADZONE else vy_raw
     cam_vel = np.array([vx * MAX_SPEED, vy * MAX_SPEED])
 
     # 3. IVK → send omega
     omega = inverse_vk(cam_pos, cam_vel)
     send_omega(omega)
 
+    # 4. Maintain fixed loop rate
     elapsed = time.perf_counter() - t0
     if elapsed < dt:
         time.sleep(dt - elapsed)
