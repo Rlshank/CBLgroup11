@@ -1,4 +1,8 @@
-# camera_support_sim.py with inverse kinematics
+# =========================================================
+# camera_support_sim.py
+# Cable camera simulation using MuJoCo tendons
+# =========================================================
+
 import time
 import threading
 import tkinter as tk
@@ -7,189 +11,187 @@ import mujoco
 import mujoco.viewer
 
 
-xml = """
+# =========================================================
+# MUJOCO XML
+# =========================================================
+
+xml = r"""
 <mujoco model="camera_cable_system">
 
-    <compiler angle="degree"/>
-    <option gravity="0 0 -9.81" timestep="0.002"/>
+    <compiler angle="degree" coordinate="local"/>
 
-    <default>
-        <geom friction="0.8 0.1 0.1"
-              density="500"/>
-        <site size="0.025"/>
-    </default>
+    <option gravity="0 0 -9.81"
+            timestep="0.002"/>
+
+    <visual>
+        <headlight ambient="0.4 0.4 0.4"/>
+    </visual>
+
+    <asset>
+        <texture type="skybox"
+                 builtin="gradient"
+                 rgb1="0.7 0.8 0.9"
+                 rgb2="0.1 0.1 0.1"
+                 width="512"
+                 height="512"/>
+    </asset>
 
     <worldbody>
 
-        <!-- Floor -->
-        <geom name="floor"
-              type="plane"
-              size="4 4 0.1"
-              rgba="0.9 0.9 0.9 1"/>
+        <!-- ================================================= -->
+        <!-- GROUND -->
+        <!-- ================================================= -->
 
-        <!-- LEFT TRIANGULAR SUPPORT -->
+        <geom type="plane"
+              size="3 3 0.1"
+              rgba="0.85 0.85 0.85 1"/>
 
-        <geom name="left_support_left"
-              type="capsule"
-              fromto="-1.15 0 0.05   -1.0 0 1.25"
-              size="0.05"
-              rgba="0 0.6 1 1"/>
+        <!-- ================================================= -->
+        <!-- base -->
+        <!-- ================================================= -->
 
-        <geom name="left_support_right"
-              type="capsule"
-              fromto="-0.85 0 0.05   -1.0 0 1.25"
-              size="0.05"
-              rgba="0 0.6 1 1"/>
+        <!-- Base -->
+            <geom type="box"
+                  pos="0 0 0.01"
+                  size="0.50 0.20 0.01"
+                  rgba="0.55 0.35 0.2 1"/>
 
-        <geom name="left_support_base"
-              type="capsule"
-              fromto="-1.15 0 0.05   -0.85 0 0.05"
-              size="0.05"
-              rgba="0 0.6 1 1"/>
 
-        <!-- RIGHT TRIANGULAR SUPPORT -->
+        <!-- ================================================= -->
+        <!-- LEFT SUPPORT -->
+        <!-- ================================================= -->
 
-        <geom name="right_support_left"
-              type="capsule"
-              fromto="0.85 0 0.05   1.0 0 1.25"
-              size="0.05"
-              rgba="0 0.6 1 1"/>
+        <body name="left_support"
+              pos="-0.49 0 0">
 
-        <geom name="right_support_right"
-              type="capsule"
-              fromto="1.15 0 0.05   1.0 0 1.25"
-              size="0.05"
-              rgba="0 0.6 1 1"/>
+            <!-- Vertical pillar -->
+            <geom type="box"
+                  pos="0 0 0.25"
+                  size="0.015 0.015 0.25"
+                  rgba="0.72 0.5 0.35 1"/>
 
-        <geom name="right_support_base"
-              type="capsule"
-              fromto="0.85 0 0.05   1.15 0 0.05"
-              size="0.05"
-              rgba="0 0.6 1 1"/>
+            <!-- Triangle frame -->
+            <geom type="capsule"
+                  fromto="0 0 0.15   0 0 0.50"
+                  size="0.008"
+                  rgba="0.72 0.5 0.35 1"/>
 
-        <!-- TOP PULLEYS -->
+            <geom type="capsule"
+                  fromto="0 0 0.15   0.12 0 0.32"
+                  size="0.008"
+                  rgba="0.72 0.5 0.35 1"/>
 
-        <geom name="left_top_pulley"
-              type="cylinder"
-              pos="-1.0 0 1.25"
-              euler="90 0 0"
-              size="0.11 0.04"
-              rgba="1 0 0 1"/>
+            <geom type="capsule"
+                  fromto="0 0 0.32   0.12 0 0.32"
+                  size="0.008"
+                  rgba="0.72 0.5 0.35 1"/>
 
-        <geom name="right_top_pulley"
-              type="cylinder"
-              pos="1.0 0 1.25"
-              euler="90 0 0"
-              size="0.11 0.04"
-              rgba="1 0 0 1"/>
+            <!-- Pulley -->
+            <site name="left_pulley"
+                  pos="0 0 0.50"
+                  size="0.01"
+                  rgba="0 0 1 1"/>
 
-        <!-- LOWER PULLEYS -->
-
-        <geom name="left_lower_pulley"
-              type="cylinder"
-              pos="-1.0 0 0.28"
-              euler="90 0 0"
-              size="0.09 0.03"
-              rgba="1 0 0 1"/>
-
-        <geom name="right_lower_pulley"
-              type="cylinder"
-              pos="1.0 0 0.28"
-              euler="90 0 0"
-              size="0.09 0.03"
-              rgba="1 0 0 1"/>
-
-        <!-- MOTORS -->
-
-        <geom name="left_motor"
-              type="box"
-              pos="-1.55 0 0.12"
-              size="0.12 0.08 0.08"
-              rgba="0.6 0.3 0.7 1"/>
-
-        <geom name="right_motor"
-              type="box"
-              pos="1.55 0 0.12"
-              size="0.12 0.08 0.08"
-              rgba="0.6 0.3 0.7 1"/>
-
-        <!-- CABLE ROUTING SITES -->
-
-        <site name="left_lower_site"
-              pos="-1.0 0 0.28"
-              rgba="1 0 0 1"/>
-
-        <site name="right_lower_site"
-              pos="1.0 0 0.28"
-              rgba="0 0 1 1"/>
-
-        <site name="left_top_site"
-              pos="-1.0 0 1.25"
-              rgba="1 0 0 1"/>
-
-        <site name="right_top_site"
-              pos="1.0 0 1.25"
-              rgba="0 0 1 1"/>
+            <!-- Motor -->
+            <geom type="box"
+                  pos="0.05 0 0.30"
+                  size="0.03 0.03 0.03"
+                  rgba="0.1 0.1 0.1 1"/>
+        </body>
         
-        <site name="left_motor_site"
-                pos="-1.55 0 0.12"
-                rgba="0.6 0.3 0.7 1"/>
         
-        <site name="right_motor_site"
-                pos="1.55 0 0.12"
-                rgba="0.6 0.3 0.7 1"/>
+        <!-- ================================================= -->
+        <!-- RIGHT SUPPORT -->
+        <!-- ================================================= -->
 
-        <!-- CAMERA BODY -->
+        <body name="right_support"
+              pos="0.47 0 0">
 
-        <body name="camera_body"
+            <!-- Vertical pillar -->
+            <geom type="box"
+                  pos="0 0 0"
+                  size="0.032 0.04 0.30"
+                  rgba="0.72 0.5 0.35 1"/>
+
+            <!-- sheet r1 -->
+            <geom type="box"
+                  pos="0.002 0.015 0.40"
+                  size="0.03 0.003 0.10"
+                  rgba="0.72 0.5 0.35 1"/>      
+
+            <!-- sheet r2 -->
+            <geom type="box"
+                  pos="0.002 -0.015 0.40"
+                  size="0.032 0.003 0.10"
+                  rgba="0.72 0.5 0.35 1"/>         
+                  
+            <!-- wood support plate -->
+            <geom type="box"
+                  pos="0.11 0 0.30"
+                  size="0.14 0.20 0.01"
+                  rgba="0.72 0.5 0.35 1"/>
+
+            <geom type="capsule"
+                  fromto="0 0 0.15   0.11 0 0.29"
+                  size="0.02"
+                  rgba="0.72 0.5 0.35 1"/>
+
+            <!-- Pulley -->
+            <site name="right_pulley"
+                  pos="0 0 0.50"
+                  size="0.01"
+                  rgba="0 0 1 1"/>
+
+            <!-- Motor -->
+            <geom type="box"
+                  pos="0.105 0.08 0.34"
+                  size="0.04 0.06 0.04"
+                  rgba="0.1 0.1 0.1 1"/>
+        </body>
+
+        <!-- ================================================= -->
+        <!-- CAMERA -->
+        <!-- ================================================= -->
+
+        <body name="camera"
               mocap="true"
-              pos="0 0 0.75">
+              pos="0 0 0.20">
 
-            <geom name="camera_box"
-                  type="box"
-                  size="0.10 0.06 0.07"
-                  rgba="0.05 0.05 0.05 1"
-                  contype="0"
-                  conaffinity="0"/>
-
-            <geom name="camera_lens"
-                  type="cylinder"
-                  pos="0 -0.075 0"
-                  euler="90 0 0"
-                  size="0.035 0.025"
-                  rgba="0.01 0.01 0.01 1"
-                  contype="0"
-                  conaffinity="0"/>
+            <geom type="box"
+                  size="0.025 0.025 0.025"
+                  mass="0.2"
+                  rgba="0 0 0 1"/>
 
             <site name="camera_site"
-                  pos="0 0 0.06"
-                  rgba="0 1 0 1"/>
-
+                  pos="0 0 0"
+                  size="0.008"
+                  rgba="1 0 0 1"/>
         </body>
 
     </worldbody>
 
-    <!-- VISUAL CABLES -->
+    <!-- ================================================= -->
+    <!-- CABLE TENDONS -->
+    <!-- ================================================= -->
 
     <tendon>
 
+        <!-- Left cable -->
         <spatial name="left_cable"
-                 width="0.008"
-                 rgba="0 0 0 1">
+                 width="0.004"
+                 rgba="0 0.7 1 1">
 
-            <site site="left_motor_site"/>     
-            <site site="left_lower_site"/>
-            <site site="left_top_site"/>
+            <site site="left_pulley"/>
             <site site="camera_site"/>
 
         </spatial>
 
+        <!-- Right cable -->
         <spatial name="right_cable"
-                 width="0.008"
-                 rgba="0 0 0 1">
-            <site site="right_motor_site"/>
-            <site site="right_lower_site"/>
-            <site site="right_top_site"/>
+                 width="0.004"
+                 rgba="0 0.7 1 1">
+
+            <site site="right_pulley"/>
             <site site="camera_site"/>
 
         </spatial>
@@ -200,80 +202,85 @@ xml = """
 """
 
 
+# =========================================================
+# CREATE MODEL
+# =========================================================
+
 model = mujoco.MjModel.from_xml_string(xml)
 data = mujoco.MjData(model)
+
+
+# =========================================================
+# CAMERA IDS
+# =========================================================
 
 camera_body_id = mujoco.mj_name2id(
     model,
     mujoco.mjtObj.mjOBJ_BODY,
-    "camera_body"
+    "camera"
 )
 
 camera_mocap_id = model.body_mocapid[camera_body_id]
 
 
 # =========================================================
-# INVERSE KINEMATICS PARAMETERS
+# REAL SYSTEM DIMENSIONS
 # =========================================================
 
-spool_r = 0.10
+PULLEY_HEIGHT = 0.50
+HALF_SPAN = 0.465
 
-anchor_1 = np.array([-1.0, 1.25])
-anchor_2 = np.array([1.0, 1.25])
+anchor_1 = np.array([-HALF_SPAN, PULLEY_HEIGHT])
+anchor_2 = np.array([ HALF_SPAN, PULLEY_HEIGHT])
 
-prev_pos = np.array([0.0, 0.75])
+
+# =========================================================
+# WINCH PARAMETERS
+# =========================================================
+
+# 1 cm spool radius
+spool_r = 0.01
 
 left_motor_angle = 0.0
 right_motor_angle = 0.0
 
 
 # =========================================================
-# INVERSE KINEMATICS FUNCTION
+# INITIAL POSITION
 # =========================================================
 
-def inverse_kinematics(des_x, des_z):
-    global prev_pos
-
-    des_pos = np.array([des_x, des_z])
-
-    # Current cable lengths
-    L1 = np.linalg.norm(anchor_1 - des_pos)
-    L2 = np.linalg.norm(anchor_2 - des_pos)
-
-    # Previous cable lengths
-    L1_prev = np.linalg.norm(anchor_1 - prev_pos)
-    L2_prev = np.linalg.norm(anchor_2 - prev_pos)
-
-    # Cable length changes
-    dL1 = L1 - L1_prev
-    dL2 = L2 - L2_prev
-
-    # Convert cable length to spool rotation
-    dtheta1 = np.degrees(dL1 / spool_r)
-    dtheta2 = np.degrees(dL2 / spool_r)
-
-    prev_pos = des_pos.copy()
-
-    return dtheta1, dtheta2
+prev_pos = np.array([0.0, 0.20])
 
 
 # =========================================================
-# CAMERA POSITION VARIABLES
+# CAMERA POSITION
 # =========================================================
 
-camera_position = np.array([0.0, 0.0, 0.75], dtype=float)
-target_position = np.array([0.0, 0.0, 0.75], dtype=float)
+camera_position = np.array(
+    [0.0, 0.0, 0.20],
+    dtype=float
+)
+
+target_position = np.array(
+    [0.0, 0.0, 0.20],
+    dtype=float
+)
 
 
 # =========================================================
 # MOVEMENT LIMITS
 # =========================================================
 
-MIN_X = -0.70
-MAX_X = 0.70
+MIN_X = -0.40
+MAX_X =  0.40
 
-MIN_Z = 0.50
-MAX_Z = 1.05
+MIN_Z = 0.10
+MAX_Z = 0.45
+
+
+# =========================================================
+# MOVEMENT SPEED
+# =========================================================
 
 MOVEMENT_SPEED = 2.0
 
@@ -283,17 +290,57 @@ running = True
 
 
 # =========================================================
-# MUJOCO SIMULATION THREAD
+# INVERSE KINEMATICS
+# =========================================================
+
+def inverse_kinematics(des_x, des_z):
+
+    global prev_pos
+
+    des_pos = np.array([des_x, des_z])
+
+    # Current cable lengths
+    L1 = np.linalg.norm(des_pos - anchor_1)
+    L2 = np.linalg.norm(des_pos - anchor_2)
+
+    # Previous cable lengths
+    L1_prev = np.linalg.norm(prev_pos - anchor_1)
+    L2_prev = np.linalg.norm(prev_pos - anchor_2)
+
+    # Cable length change
+    dL1 = L1 - L1_prev
+    dL2 = L2 - L2_prev
+
+    # Convert to spool rotation
+    dtheta1 = np.degrees(dL1 / spool_r)
+    dtheta2 = np.degrees(dL2 / spool_r)
+
+    prev_pos = des_pos.copy()
+
+    return (
+        dtheta1,
+        dtheta2,
+        L1,
+        L2
+    )
+
+
+# =========================================================
+# MUJOCO THREAD
 # =========================================================
 
 def run_mujoco():
+
     global running
     global camera_position
     global left_motor_angle
     global right_motor_angle
 
-    data.mocap_pos[camera_mocap_id, :] = camera_position
-    data.mocap_quat[camera_mocap_id, :] = np.array([1.0, 0.0, 0.0, 0.0])
+    data.mocap_pos[camera_mocap_id] = camera_position
+
+    data.mocap_quat[camera_mocap_id] = np.array(
+        [1.0, 0.0, 0.0, 0.0]
+    )
 
     mujoco.mj_forward(model, data)
 
@@ -303,19 +350,26 @@ def run_mujoco():
 
             dt = model.opt.timestep
 
+            # =============================================
+            # TARGET POSITION
+            # =============================================
+
             with target_lock:
                 target_copy = target_position.copy()
 
-            # Smooth movement toward slider target
+            # =============================================
+            # SMOOTH MOVEMENT
+            # =============================================
+
             camera_position += (
                 target_copy - camera_position
             ) * MOVEMENT_SPEED * dt
 
-            # =================================================
-            # INVERSE KINEMATICS
-            # =================================================
+            # =============================================
+            # IK
+            # =============================================
 
-            dtheta1, dtheta2 = inverse_kinematics(
+            dtheta1, dtheta2, L1, L2 = inverse_kinematics(
                 camera_position[0],
                 camera_position[2]
             )
@@ -323,17 +377,29 @@ def run_mujoco():
             left_motor_angle += dtheta1
             right_motor_angle += dtheta2
 
-            # Print motor angles
+            # =============================================
+            # PRINT INFO
+            # =============================================
+
             print(
-                f"Left motor: {left_motor_angle:.2f} deg | "
-                f"Right motor: {right_motor_angle:.2f} deg"
+                f"L cable: {L1:.3f} m | "
+                f"R cable: {L2:.3f} m | "
+                f"L motor: {left_motor_angle:.1f} deg | "
+                f"R motor: {right_motor_angle:.1f} deg"
             )
 
-            # Move camera body
-            data.mocap_pos[camera_mocap_id, :] = camera_position
-            data.mocap_quat[camera_mocap_id, :] = np.array([1.0, 0.0, 0.0, 0.0])
+            # =============================================
+            # MOVE CAMERA
+            # =============================================
+
+            data.mocap_pos[camera_mocap_id] = camera_position
+
+            data.mocap_quat[camera_mocap_id] = np.array(
+                [1.0, 0.0, 0.0, 0.0]
+            )
 
             mujoco.mj_forward(model, data)
+
             viewer.sync()
 
             time.sleep(dt)
@@ -342,29 +408,36 @@ def run_mujoco():
 
 
 # =========================================================
-# TKINTER CONTROL WINDOW
+# TKINTER GUI
 # =========================================================
 
 def run_slider_window():
+
     global running
 
     root = tk.Tk()
-    root.title("Camera Slider Control")
+
+    root.title("Cable Camera Control")
 
     root.geometry("420x420")
 
     title = tk.Label(
         root,
-        text="Move the camera using the sliders",
+        text="Cable Camera Controller",
         font=("Arial", 14, "bold")
     )
+
     title.pack(pady=10)
 
     # =====================================================
     # X SLIDER
     # =====================================================
 
-    x_label = tk.Label(root, text="Horizontal position X")
+    x_label = tk.Label(
+        root,
+        text="Horizontal Position X"
+    )
+
     x_label.pack()
 
     x_slider = tk.Scale(
@@ -377,13 +450,18 @@ def run_slider_window():
     )
 
     x_slider.set(0.0)
+
     x_slider.pack(pady=10)
 
     # =====================================================
     # Z SLIDER
     # =====================================================
 
-    z_label = tk.Label(root, text="Camera height Z")
+    z_label = tk.Label(
+        root,
+        text="Camera Height Z"
+    )
+
     z_label.pack()
 
     z_slider = tk.Scale(
@@ -395,7 +473,8 @@ def run_slider_window():
         length=220
     )
 
-    z_slider.set(0.75)
+    z_slider.set(0.20)
+
     z_slider.pack(pady=10)
 
     # =====================================================
@@ -404,40 +483,45 @@ def run_slider_window():
 
     position_label = tk.Label(
         root,
-        text="x = 0.00, z = 0.75"
+        text="x = 0.00 , z = 0.20"
     )
 
     position_label.pack(pady=5)
 
     # =====================================================
-    # UPDATE FUNCTION
+    # UPDATE TARGET
     # =====================================================
 
-    def update_target_from_sliders():
+    def update_target():
 
         with target_lock:
+
             target_position[0] = float(x_slider.get())
             target_position[1] = 0.0
             target_position[2] = float(z_slider.get())
 
         position_label.config(
-            text=f"x = {target_position[0]:.2f}, z = {target_position[2]:.2f}"
+            text=(
+                f"x = {target_position[0]:.2f} , "
+                f"z = {target_position[2]:.2f}"
+            )
         )
 
         if running:
-            root.after(20, update_target_from_sliders)
+            root.after(20, update_target)
 
     # =====================================================
     # RESET BUTTON
     # =====================================================
 
     def reset_camera():
+
         x_slider.set(0.0)
-        z_slider.set(0.75)
+        z_slider.set(0.20)
 
     reset_button = tk.Button(
         root,
-        text="Reset camera to centre",
+        text="Reset Camera",
         command=reset_camera
     )
 
@@ -448,13 +532,20 @@ def run_slider_window():
     # =====================================================
 
     def close_program():
+
         global running
+
         running = False
+
         root.destroy()
 
-    root.protocol("WM_DELETE_WINDOW", close_program)
+    root.protocol(
+        "WM_DELETE_WINDOW",
+        close_program
+    )
 
-    update_target_from_sliders()
+    update_target()
+
     root.mainloop()
 
 
@@ -470,6 +561,3 @@ mujoco_thread = threading.Thread(
 mujoco_thread.start()
 
 run_slider_window()
-
-
-
