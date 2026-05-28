@@ -53,7 +53,7 @@ xml = r"""
         <!-- Base -->
             <geom type="box"
                   pos="0 0 0.01"
-                  size="0.50 0.20 0.01"
+                  size="0.5 0.10 0.01"
                   rgba="0.55 0.35 0.2 1"/>
 
 
@@ -62,31 +62,68 @@ xml = r"""
         <!-- ================================================= -->
 
         <body name="left_support"
-              pos="-0.49 0 0">
+              pos="-0.485 0 0">
 
             <!-- Vertical pillar -->
             <geom type="box"
-                  pos="0 0 0.25"
-                  size="0.015 0.015 0.25"
+                  pos="0 0 0.15"
+                  size="0.016 0.02 0.15"
+                  rgba="0.52 0.40 0.25 1"/>
+
+            <!-- vertical sheet l1 -->
+            <geom type="box"
+                  pos="-0.0015 0.015 0.40"
+                  size="0.02 0.0015 0.10"
+                  rgba="0.72 0.5 0.35 1"/>      
+
+            <!-- vertical sheet l2 -->
+            <geom type="box"
+                  pos="-0.0015 -0.015 0.40"
+                  size="0.02 0.0015 0.10"
+                  rgba="0.72 0.5 0.35 1"/>         
+                  
+            <!-- horizontal sheet l1 -->
+            <geom type="box"
+                  pos="-0.065 0.015 0.33"
+                  size="0.050 0.0015 0.02"
+                  rgba="0.72 0.5 0.35 1"/>
+                  
+            <!-- horizontal sheet l2 -->
+            <geom type="box"
+                  pos="-0.065 -0.015 0.33"
+                  size="0.050 0.0015 0.02"
                   rgba="0.72 0.5 0.35 1"/>
 
-            <!-- Triangle frame -->
-            <geom type="capsule"
-                  fromto="0 0 0.15   0 0 0.50"
-                  size="0.008"
+            <!-- tilted diagonal brace sheet l1 -->
+            <geom type="box"
+                  pos="-0.050 0.015 0.38"
+                  euler="0 52 0"
+                  size="0.010 0.00075 0.0725"
                   rgba="0.72 0.5 0.35 1"/>
 
-            <geom type="capsule"
-                  fromto="0 0 0.15   0.12 0 0.32"
-                  size="0.008"
+            <!-- tilted diagonal brace sheet l2 -->
+            <geom type="box"
+                  pos="-0.050 -0.015 0.38"
+                  euler="0 52 0"
+                  size="0.010 0.00075 0.0725"
                   rgba="0.72 0.5 0.35 1"/>
 
+            <!-- wood support plate -->
+            <geom type="box"
+                  pos="-0.043 0 0.30"
+                  size="0.07 0.10 0.01"
+                  rgba="0.9 0.8 0.9 1"/>
+
             <geom type="capsule"
-                  fromto="0 0 0.32   0.12 0 0.32"
-                  size="0.008"
+                  fromto="0 0 0.15   -0.09 0 0.29"
+                  size="0.015"
                   rgba="0.72 0.5 0.35 1"/>
 
             <!-- Pulley -->
+            <geom type="cylinder"
+                  size="0.01 0.01"
+                  rgba="0.5 0.5 0.5 1"/>
+
             <site name="left_pulley"
                   pos="0 0 0.50"
                   size="0.01"
@@ -94,9 +131,28 @@ xml = r"""
 
             <!-- Motor -->
             <geom type="box"
-                  pos="0.05 0 0.30"
-                  size="0.03 0.03 0.03"
+                  pos="-0.0655 0.0465 0.33"
+                  size="0.02 0.03 0.02"
                   rgba="0.1 0.1 0.1 1"/>
+
+            <site name="left_motor_site"
+                  pos="-0.0655 0.0 0.33"
+                  size="0.008"
+                  rgba="1 0 0 1"/>
+
+            <!-- Motor Winch Left -->
+            <geom type="cylinder"
+                  pos="-0.0655 0.0 0.33"
+                  euler="90 0 0"
+                  size="0.03 0.01 0.03"
+                  rgba="0.15 0.15 0.15 1"/>
+
+            <!-- Top Winch Left -->
+            <geom type="cylinder"
+                  pos="0 0.0 0.485"
+                  euler="90 0 0"
+                  size="0.0175 0.01 0.0175"
+                  rgba="0.15 0.15 0.15 1"/>      
         </body>
         
         
@@ -105,38 +161,74 @@ xml = r"""
         <!-- ================================================= -->
 
         <body name="right_support"
-              pos="0.47 0 0">
+              pos="0.485 0 0">
 
             <!-- Vertical pillar -->
             <geom type="box"
-                  pos="0 0 0"
-                  size="0.032 0.04 0.30"
-                  rgba="0.72 0.5 0.35 1"/>
+                  pos="0 0 0.15"
+                  size="0.016 0.02 0.15"
+                  rgba="0.52 0.40 0.25 1"/>
 
-            <!-- sheet r1 -->
+            <!-- vertical sheet r1 -->
             <geom type="box"
-                  pos="0.002 0.015 0.40"
-                  size="0.03 0.003 0.10"
+                  pos="0.0015 0.015 0.40"
+                  size="0.02 0.0015 0.10"
                   rgba="0.72 0.5 0.35 1"/>      
 
-            <!-- sheet r2 -->
+            <!-- vertical sheet r2 -->
             <geom type="box"
-                  pos="0.002 -0.015 0.40"
-                  size="0.032 0.003 0.10"
+                  pos="0.0015 -0.015 0.40"
+                  size="0.02 0.0015 0.10"
                   rgba="0.72 0.5 0.35 1"/>         
                   
-            <!-- wood support plate -->
+            <!-- horizontal sheet r1 -->
             <geom type="box"
-                  pos="0.11 0 0.30"
-                  size="0.14 0.20 0.01"
+                  pos="0.065 0.015 0.33"
+                  size="0.050 0.0015 0.02"
+                  rgba="0.72 0.5 0.35 1"/>
+                  
+            <!-- horizontal sheet r2 -->
+            <geom type="box"
+                  pos="0.065 -0.015 0.33"
+                  size="0.050 0.0015 0.02"
                   rgba="0.72 0.5 0.35 1"/>
 
+            <!-- horizontal sheet r2 -->
+            <geom type="box"
+                  pos="0.065 -0.015 0.33"
+                  size="0.050 0.0015 0.02"
+                  rgba="0.72 0.5 0.35 1"/>
+                        
+            <!-- tilted diagonal brace sheet r1 -->
+            <geom type="box"
+                  pos="0.050 0.015 0.38"
+                  euler="0 -52 0"
+                  size="0.010 0.00075 0.0725"
+                  rgba="0.72 0.5 0.35 1"/>
+
+            <!-- tilted diagonal brace sheet r2 -->
+            <geom type="box"
+                  pos="0.050 -0.015 0.38"
+                  euler="0 -52 0"
+                  size="0.010 0.00075 0.0725"
+                  rgba="0.72 0.5 0.35 1"/>
+
+            <!-- wood support plate -->
+            <geom type="box"
+                  pos="0.043 0 0.30"
+                  size="0.07 0.10 0.01"
+                  rgba="0.9 0.8 0.9 1"/>
+
             <geom type="capsule"
-                  fromto="0 0 0.15   0.11 0 0.29"
-                  size="0.02"
+                  fromto="0 0 0.15   0.09 0 0.29"
+                  size="0.015"
                   rgba="0.72 0.5 0.35 1"/>
 
             <!-- Pulley -->
+                <geom type="cylinder"
+                  size="0.01 0.01"
+                  rgba="0.5 0.5 0.5 1"/>
+
             <site name="right_pulley"
                   pos="0 0 0.50"
                   size="0.01"
@@ -144,9 +236,28 @@ xml = r"""
 
             <!-- Motor -->
             <geom type="box"
-                  pos="0.105 0.08 0.34"
-                  size="0.04 0.06 0.04"
+                  pos="0.0655 0.0465 0.33"
+                  size="0.02 0.03 0.02"
                   rgba="0.1 0.1 0.1 1"/>
+
+            <site name="motor_site"
+                  pos="0.0655 0.0 0.33"
+                  size="0.008"
+                  rgba="1 0 0 1"/>
+
+            <!-- Motor Wench Right -->
+            <geom type="cylinder"
+                  pos="0.0655 0.0 0.33"
+                  euler="90 0 0"
+                  size="0.03 0.01 0.03"
+                  rgba="0.15 0.15 0.15 1"/>
+
+            <!-- Top Wench Right -->
+            <geom type="cylinder"
+                  pos="0 0.0 0.485"
+                  euler="90 0 0"
+                  size="0.0175 0.01 0.0175"
+                  rgba="0.15 0.15 0.15 1"/>      
         </body>
 
         <!-- ================================================= -->
@@ -158,7 +269,7 @@ xml = r"""
               pos="0 0 0.20">
 
             <geom type="box"
-                  size="0.025 0.025 0.025"
+                  size="0.0125 0.0125 0.0125"
                   mass="0.2"
                   rgba="0 0 0 1"/>
 
@@ -181,6 +292,7 @@ xml = r"""
                  width="0.004"
                  rgba="0 0.7 1 1">
 
+            <site site="left_motor_site"/>
             <site site="left_pulley"/>
             <site site="camera_site"/>
 
@@ -191,6 +303,7 @@ xml = r"""
                  width="0.004"
                  rgba="0 0.7 1 1">
 
+            <site site="motor_site"/>
             <site site="right_pulley"/>
             <site site="camera_site"/>
 
