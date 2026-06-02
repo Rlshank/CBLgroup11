@@ -1,0 +1,54 @@
+// ===============================
+// NEMA17 + A4988 REVERSING TEST
+// ===============================
+
+#define STEP_PIN 3
+#define DIR_PIN 4
+#define ENABLE_PIN 5
+
+const int STEP_DELAY_US = 1200;   // speed control
+const unsigned long SWITCH_TIME = 4000; // 4 seconds
+
+unsigned long lastSwitchTime = 0;
+bool direction = true;
+
+void stepMotor()
+{
+  digitalWrite(STEP_PIN, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(STEP_PIN, LOW);
+  delayMicroseconds(STEP_DELAY_US);
+}
+
+void setup()
+{
+  pinMode(STEP_PIN, OUTPUT);
+  pinMode(DIR_PIN, OUTPUT);
+  pinMode(ENABLE_PIN, OUTPUT);
+
+  digitalWrite(ENABLE_PIN, LOW); // enable driver
+
+  Serial.begin(115200);
+  Serial.println("Stepper reverse test started");
+
+  digitalWrite(DIR_PIN, direction);
+  lastSwitchTime = millis();
+}
+
+void loop()
+{
+  // run motor continuously
+  stepMotor();
+
+  // check if 4 seconds passed
+  if (millis() - lastSwitchTime >= SWITCH_TIME)
+  {
+    direction = !direction;                 // flip direction
+    digitalWrite(DIR_PIN, direction);       // apply it
+
+    lastSwitchTime = millis();
+
+    Serial.print("Direction changed: ");
+    Serial.println(direction ? "FORWARD" : "REVERSE");
+  }
+}
