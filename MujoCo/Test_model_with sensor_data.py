@@ -288,7 +288,7 @@ def parse_imu_line(line: str):
     Example:
     0.01,0.02,9.80,0.001,0.002,0.000,1,0,0,0
     """
-    ax,ay,az,gx,gy,gz,qw,qx,qy,qz = 0.01,0.02,9.80,0.001,0.002,0.000,1,0,0,0
+    
     try:
 
         parts = [float(v) for v in line.strip().split(",")]
@@ -324,7 +324,7 @@ def imu_reader_thread():
     global running
 
     port = find_imu_port()
-
+    
     if port is None:
         print("[IMU] ERROR: No serial port found.")
         return
@@ -588,6 +588,97 @@ def run_status_window():
     update_labels()
     root.mainloop()
 
+# =========================================================
+# FAKE IMU THREAD
+# Generates simulated IMU motion for testing
+# =========================================================
+
+def fake_imu_thread():
+
+    global imu_position
+    global imu_quat
+    global imu_accel_raw
+    global imu_gyro_raw
+    global running
+
+    t0 = time.perf_counter()
+
+    while running:
+
+        t = time.perf_counter() - t0
+
+        # ============================================
+        # SIMULATED POSITION
+        # ============================================
+
+        # horizontal sine motion
+        x = 0.20 * np.sin(0.5 * t)
+
+        # vertical sine motion
+        z = 0.25 + 0.08 * np.sin(1.2 * t)
+
+        # ============================================
+        # SIMULATED VELOCITY
+        # ============================================
+
+        vx = 0.20 * 0.5 * np.cos(0.5 * t)
+
+        vz = 0.08 * 1.2 * np.cos(1.2 * t)
+
+        # ============================================
+        # SIMULATED ACCELERATION
+        # ============================================
+
+        ax = -0.20 * (0.5**2) * np.sin(0.5 * t)
+
+        az = -0.08 * (1.2**2) * np.sin(1.2 * t)
+
+        # include gravity
+        accel = np.array([
+            ax,
+            0.0,
+            9.81 + az
+        ])
+
+        # ============================================
+        # SIMULATED ORIENTATION
+        # ============================================
+
+        # small oscillating roll angle
+
+        roll = np.radians(
+            10 * np.sin(0.8 * t)
+        )
+
+        # quaternion from roll
+
+        qw = np.cos(roll / 2)
+
+        qx = np.sin(roll / 2)
+
+        quat = np.array([
+            qw,
+            qx,
+            0.0,
+            0.0
+        ])
+
+        # ============================================
+        # WRITE SHARED STATE
+        # ============================================
+
+        with imu_lock:
+
+            imu_position[:] = [x, 0.0, z]
+
+            imu_quat[:] = quat
+
+            imu_accel_raw[:] = accel
+
+            imu_gyro_raw[:] = [0.1, 0.5, 0.1]
+
+        time.sleep(0.01)
+
 
 # =========================================================
 # START ALL THREADS
@@ -597,3 +688,5 @@ threading.Thread(target=imu_reader_thread, daemon=True).start()
 threading.Thread(target=run_mujoco,        daemon=True).start()
 
 run_status_window()
+
+

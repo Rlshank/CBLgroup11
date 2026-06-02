@@ -322,7 +322,17 @@ xml = r"""
 model = mujoco.MjModel.from_xml_string(xml)
 data = mujoco.MjData(model)
 
+left_tendon_id = mujoco.mj_name2id(
+    model,
+    mujoco.mjtObj.mjOBJ_TENDON,
+    "left_cable"
+)
 
+right_tendon_id = mujoco.mj_name2id(
+    model,
+    mujoco.mjtObj.mjOBJ_TENDON,
+    "right_cable"
+)
 # =========================================================
 # CAMERA IDS
 # =========================================================
@@ -373,6 +383,15 @@ camera_position = np.array(
     [0.0, 0.0, 0.20],
     dtype=float
 )
+
+# =========================================================
+# TENSION CALCULATION VARIABLES
+# =========================================================
+
+CAMERA_MASS = 0.15
+
+prev_camera_position = camera_position.copy()
+prev_velocity = np.zeros(3)
 
 target_position = np.array(
     [0.0, 0.0, 0.20],
@@ -437,7 +456,56 @@ def inverse_kinematics(des_x, des_z):
         L2
     )
 
+def tension_to_color(T):
 
+    T_MAX = 3.0
+
+    ratio = np.clip(T / T_MAX, 0.0, 1.0)
+
+    # Blue -> Green -> Yellow -> Orange -> Red
+
+    if ratio < 0.25:
+
+        # Blue -> Green
+        t = ratio / 0.25
+
+        red   = 0.0
+        green = t
+        blue  = 1.0 - t
+
+    elif ratio < 0.50:
+
+        # Green -> Yellow
+        t = (ratio - 0.25) / 0.25
+
+        red   = t
+        green = 1.0
+        blue  = 0.0
+
+    elif ratio < 0.75:
+
+        # Yellow -> Orange
+        t = (ratio - 0.50) / 0.25
+
+        red   = 1.0
+        green = 1.0 - 0.35 * t
+        blue  = 0.0
+
+    else:
+
+        # Orange -> Red
+        t = (ratio - 0.75) / 0.25
+
+        red   = 1.0
+        green = 0.65 * (1.0 - t)
+        blue  = 0.0
+
+    return np.array([
+        red,
+        green,
+        blue,
+        1.0
+    ])
 # =========================================================
 # MUJOCO THREAD
 # =========================================================
@@ -448,6 +516,9 @@ def run_mujoco():
     global camera_position
     global left_motor_angle
     global right_motor_angle
+
+    global prev_camera_position
+    global prev_velocity
 
     data.mocap_pos[camera_mocap_id] = camera_position
 
@@ -478,6 +549,59 @@ def run_mujoco():
                 target_copy - camera_position
             ) * MOVEMENT_SPEED * dt
 
+            velocity = (
+                camera_position - prev_camera_position
+                ) / dt
+
+            acceleration = (
+                velocity - prev_velocity
+            ) / dt
+
+            camera_pos_2d = np.array([
+                camera_position[0],
+                camera_position[2]
+            ])
+
+            left_vec = anchor_1 - camera_pos_2d
+            right_vec = anchor_2 - camera_pos_2d
+
+            left_dir = left_vec / np.linalg.norm(left_vec)
+            right_dir = right_vec / np.linalg.norm(right_vec)
+
+            desired_force = CAMERA_MASS * (
+                acceleration[[0, 2]] + np.array([0.0, 9.81])
+            )    
+
+
+            A = np.column_stack(
+                (left_dir, right_dir)
+            )
+
+            try: 
+                
+                tensions = np.linalg.solve(
+                    A,
+                    desired_force
+                )
+
+                T_left = max(
+                    0.0,
+                    tensions[0]
+                )
+                
+                T_right = max(
+                    0.0,
+                    tensions[1]
+                )
+
+            except np.linalg.LinAlgError:
+
+                T_left = 0.0
+                T_right = 0.0
+            
+            prev_camera_position = camera_position.copy()
+            prev_velocity = velocity.copy()
+
             # =============================================
             # IK
             # =============================================
@@ -495,11 +619,13 @@ def run_mujoco():
             # =============================================
 
             print(
-                f"L cable: {L1:.3f} m | "
-                f"R cable: {L2:.3f} m | "
-                f"L motor: {left_motor_angle:.1f} deg | "
-                f"R motor: {right_motor_angle:.1f} deg"
-            )
+                f"L cable={L1:.3f}m | "
+                f"R cable={L2:.3f}m | "
+                f"T_left={T_left:.2f}N | "
+                f"T_right={T_right:.2f}N | "
+                f"L motor={left_motor_angle:.1f}deg | "
+                f"R motor={right_motor_angle:.1f}deg"
+)
 
             # =============================================
             # MOVE CAMERA
@@ -510,6 +636,14 @@ def run_mujoco():
             data.mocap_quat[camera_mocap_id] = np.array(
                 [1.0, 0.0, 0.0, 0.0]
             )
+
+            model.tendon_rgba[left_tendon_id] = (
+                tension_to_color(T_left)
+            )
+
+            model.tendon_rgba[right_tendon_id] = (
+                tension_to_color(T_right)
+            )     
 
             mujoco.mj_forward(model, data)
 
