@@ -266,7 +266,7 @@ xml = r"""
 
         <body name="camera"
               mocap="true"
-              pos="0 0 0.20">
+              pos="0 0 0.05">
 
             <geom type="box"
                   size="0.0125 0.0125 0.0125"
@@ -362,7 +362,7 @@ anchor_2 = np.array([ HALF_SPAN, PULLEY_HEIGHT])
 # =========================================================
 
 # 1 cm spool radius
-spool_r = 0.01
+spool_r = 0.01275
 
 left_motor_angle = 0.0
 right_motor_angle = 0.0
@@ -372,7 +372,7 @@ right_motor_angle = 0.0
 # INITIAL POSITION
 # =========================================================
 
-prev_pos = np.array([0.0, 0.20])
+prev_pos = np.array([0.0, 0.05])
 
 
 # =========================================================
@@ -380,7 +380,7 @@ prev_pos = np.array([0.0, 0.20])
 # =========================================================
 
 camera_position = np.array(
-    [0.0, 0.0, 0.20],
+    [0.0, 0.0, 0.05],
     dtype=float
 )
 
@@ -394,7 +394,7 @@ prev_camera_position = camera_position.copy()
 prev_velocity = np.zeros(3)
 
 target_position = np.array(
-    [0.0, 0.0, 0.20],
+    [0.0, 0.0, 0.05],
     dtype=float
 )
 
@@ -406,7 +406,7 @@ target_position = np.array(
 MIN_X = -0.40
 MAX_X =  0.40
 
-MIN_Z = 0.10
+MIN_Z = 0.05
 MAX_Z = 0.45
 
 
@@ -720,7 +720,7 @@ def run_slider_window():
         length=220
     )
 
-    z_slider.set(0.20)
+    z_slider.set(0.05)
 
     z_slider.pack(pady=10)
 
@@ -730,7 +730,7 @@ def run_slider_window():
 
     position_label = tk.Label(
         root,
-        text="x = 0.00 , z = 0.20"
+        text="x = 0.00 , z = 0.05"
     )
 
     position_label.pack(pady=5)
@@ -764,7 +764,7 @@ def run_slider_window():
     def reset_camera():
 
         x_slider.set(0.0)
-        z_slider.set(0.20)
+        z_slider.set(0.06)
 
     reset_button = tk.Button(
         root,

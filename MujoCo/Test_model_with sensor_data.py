@@ -18,7 +18,7 @@ import serial.tools.list_ports
 # =========================================================
 
 IMU_BAUD     = 115200
-IMU_PORT     = None        # None = auto-detect, or set e.g. "COM3" / "/dev/ttyUSB0"
+IMU_PORT = "COM7"        # None = auto-detect, or set e.g. "COM3" / "/dev/ttyUSB0"
 IMU_TIMEOUT  = 0.01        # seconds
 
 
@@ -98,6 +98,7 @@ xml = r"""
             <geom type="cylinder" pos="-0.0655 0.0 0.33"
                   euler="90 0 0" size="0.03 0.01 0.03"
                   rgba="0.15 0.15 0.15 1"/>
+                  
             <geom type="cylinder" pos="0 0.0 0.485"
                   euler="90 0 0" size="0.0175 0.01 0.0175"
                   rgba="0.15 0.15 0.15 1"/>
@@ -216,7 +217,7 @@ prev_pos          = np.array([0.0, 0.20])
 imu_lock = threading.Lock()
 
 # Position estimated from physical IMU (metres)
-imu_position = np.array([0.0, 0.0, 0.20], dtype=float)
+imu_position = np.array([0.0, 0.0, 0.05], dtype=float)
 
 # Raw readings (for GUI display)
 imu_accel_raw = np.zeros(3)
@@ -293,15 +294,14 @@ def parse_imu_line(line: str):
 
         parts = [float(v) for v in line.strip().split(",")]
 
-        if len(parts) >= 10:
+        if len(parts) >= 7:
 
             accel = np.array(parts[0:3], dtype=float)
 
             gyro = np.array(parts[3:6], dtype=float)
 
-            quat = np.array(parts[6:10], dtype=float)
 
-            return accel, gyro, quat
+            return accel, gyro
 
     except ValueError:
         pass
