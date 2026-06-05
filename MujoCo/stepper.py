@@ -330,23 +330,19 @@ def find_serial_port():
 def parse_serial_line(line: str):
     """
     Expected CSV format from Arduino:
-
-        steps_left, steps_right, current_left_A, current_right_A
-
+        steps_left, steps_right, current
     Example:
-        1200,-340,1.45,1.62
-
+        1200,-340,1.45
     steps_left / steps_right : cumulative signed step counts
     current_left_A / current_right_A : motor current in Amps
     """
     try:
         parts = [v.strip() for v in line.strip().split(",")]
-        if len(parts) >= 4:
+        if len(parts) >= 3:
             sl  = int(parts[0])
             sr  = int(parts[1])
-            il  = float(parts[2])
-            ir  = float(parts[3])
-            return sl, sr, il, ir
+            It  = float(parts[2])
+            return sl, sr, It
     except (ValueError, IndexError):
         pass
     return None, None, None, None

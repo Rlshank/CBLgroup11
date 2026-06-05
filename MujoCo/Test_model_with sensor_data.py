@@ -98,7 +98,7 @@ xml = r"""
             <geom type="cylinder" pos="-0.0655 0.0 0.33"
                   euler="90 0 0" size="0.03 0.01 0.03"
                   rgba="0.15 0.15 0.15 1"/>
-                  
+
             <geom type="cylinder" pos="0 0.0 0.485"
                   euler="90 0 0" size="0.0175 0.01 0.0175"
                   rgba="0.15 0.15 0.15 1"/>
@@ -289,23 +289,14 @@ def parse_imu_line(line: str):
     Example:
     0.01,0.02,9.80,0.001,0.002,0.000,1,0,0,0
     """
-    
     try:
-
         parts = [float(v) for v in line.strip().split(",")]
-
         if len(parts) >= 7:
-
             accel = np.array(parts[0:3], dtype=float)
-
             gyro = np.array(parts[3:6], dtype=float)
-
-
             return accel, gyro
-
     except ValueError:
         pass
-
     return None, None, None
 
 # =========================================================
