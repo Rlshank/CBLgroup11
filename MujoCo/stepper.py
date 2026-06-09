@@ -691,7 +691,7 @@ def fake_motor_thread():
 
         # ── Simulate total current with noise ─────────────
         I_total  = 1.2 + 0.3 * np.sin(0.3 * t)
-        I_total += 0.05 * np.random.randn()
+        I_total += 0.2 * np.random.randn()
         I_total  = max(I_total, 0.0)
 
         t_left, t_right = split_tension_by_angle(I_total, cam_x, cam_z)
