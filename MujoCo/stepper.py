@@ -28,7 +28,7 @@ SERIAL_TIMEOUT = 0.01       # seconds
 # =========================================================
 
 STEPS_PER_REV  = 200        # full steps per revolution (adjust for your motor)
-MICROSTEP      = 16         # microstepping factor (e.g. 1, 2, 4, 8, 16)
+MICROSTEP      = 1        # microstepping factor (e.g. 1, 2, 4, 8, 16)
 SPOOL_RADIUS   = 0.01275    # metres – radius of cable spool
 
 
@@ -215,7 +215,9 @@ data  = mujoco.MjData(model)
 camera_body_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "camera")
 camera_mocap_id = model.body_mocapid[camera_body_id]
 
-
+# ── Tendon IDs for colour updates ─────────────────────────
+left_tendon_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "left_cable")
+right_tendon_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "right_cable")
 # =========================================================
 # SYSTEM DIMENSIONS
 # =========================================================
@@ -298,6 +300,40 @@ steps_right = 0
 
 running = True
 
+# =========================================================
+# TENSION TO COLOUR
+# =========================================================
+
+def tension_to_color(T):
+
+    T_MAX = 3.0
+    ratio = np.clip(T / T_MAX, 0.0, 1.0)
+
+    if ratio < 0.25:
+        t     = ratio / 0.25
+        red   = 0.0
+        green = t
+        blue  = 1.0 - t
+
+    elif ratio < 0.50:
+        t     = (ratio - 0.25) / 0.25
+        red   = t
+        green = 1.0
+        blue  = 0.0
+
+    elif ratio < 0.75:
+        t     = (ratio - 0.50) / 0.25
+        red   = 1.0
+        green = 1.0 - 0.35 * t
+        blue  = 0.0
+
+    else:
+        t     = (ratio - 0.75) / 0.25
+        red   = 1.0
+        green = 0.65 * (1.0 - t)
+        blue  = 0.0
+
+    return np.array([red, green, blue, 1.0])
 
 # =========================================================
 # AUTO-DETECT SERIAL PORT
@@ -347,6 +383,59 @@ def parse_serial_line(line: str):
         pass
     return None, None, None, None
 
+def split_tension_by_angle(total_current: float, cam_x: float, cam_z: float):
+    """
+    Splits the total motor current into individual left/right
+    cable tensions using the cable geometry.
+
+    Force balance on camera:
+        Horizontal:  T_L * sin(a_L) = T_R * sin(a_R)
+        Vertical:    T_L * cos(a_L) + T_R * cos(a_R) = m * g
+
+    From horizontal equilibrium:
+        T_L / T_R = sin(a_R) / sin(a_L)
+
+    Total force from current:
+        F_total = Kt * I_total / spool_radius
+    """
+
+    # ── Cable geometry ────────────────────────────────────
+    cam = np.array([cam_x, cam_z])
+
+    vec_L = anchor_L - cam
+    vec_R = anchor_R - cam
+
+    len_L = max(np.linalg.norm(vec_L), 1e-6)
+    len_R = max(np.linalg.norm(vec_R), 1e-6)
+
+    unit_L = vec_L / len_L
+    unit_R = vec_R / len_R
+
+    # Angle from vertical (z axis)
+    sin_L = max(abs(unit_L[0]), 1e-6)   # horizontal component
+    sin_R = max(abs(unit_R[0]), 1e-6)
+    cos_L = abs(unit_L[1])              # vertical component
+    cos_R = abs(unit_R[1])
+
+    # ── Tension ratio from horizontal equilibrium ─────────
+    # T_L * sin_L = T_R * sin_R  →  T_L = T_R * (sin_R / sin_L)
+    ratio = sin_R / sin_L              # T_L = ratio * T_R
+
+    # ── Total tension from current ────────────────────────
+    # Both motors share the total current
+    # Total vertical force = m * g (static equilibrium)
+    # T_total = T_L + T_R = T_R * (ratio + 1)
+    # Use current as a scale factor on top of the geometric split
+    F_total = abs(total_current) * CURRENT_TO_TENSION
+
+    T_R = F_total / (ratio + 1)
+    T_L = ratio * T_R
+
+    T_L = np.clip(T_L, TENSION_MIN, TENSION_MAX)
+    T_R = np.clip(T_R, TENSION_MIN, TENSION_MAX)
+
+    return float(T_L), float(T_R)
+
 
 # =========================================================
 # SERIAL READER THREAD
@@ -387,30 +476,24 @@ def serial_reader_thread():
         if not raw.strip():
             continue
 
-        sl, sr, il, ir = parse_serial_line(raw)
+        sl, sr, It = parse_serial_line(raw)
+        
+        sl, sr, It = parse_serial_line(raw)
 
         if sl is None:
             continue
 
         # ── Cable length from stepper counts ──────────────
-        # Positive steps = cable lengthens (camera moves down/away)
-        # Adjust sign convention to match your motor wiring
-        L_left  = sl / STEPS_PER_METRE
-        L_right = sr / STEPS_PER_METRE
-
-        # Clamp to physically meaningful minimum (spool can't pay out negative)
-        L_left  = max(L_left,  0.05)
-        L_right = max(L_right, 0.05)
+        L_left  = max(sl / STEPS_PER_METRE, 0.05)
+        L_right = max(sr / STEPS_PER_METRE, 0.05)
 
         # ── Forward kinematics → camera position ──────────
         cam_x, cam_z = forward_kinematics(L_left, L_right)
-
         cam_x = np.clip(cam_x, MIN_X, MAX_X)
         cam_z = np.clip(cam_z, MIN_Z, MAX_Z)
 
-        # ── Current → tension ─────────────────────────────
-        t_left  = np.clip(abs(il) * CURRENT_TO_TENSION, TENSION_MIN, TENSION_MAX)
-        t_right = np.clip(abs(ir) * CURRENT_TO_TENSION, TENSION_MIN, TENSION_MAX)
+        # ── Split current into left/right tension by angle ─
+        t_left, t_right = split_tension_by_angle(It, cam_x, cam_z)
 
         # ── Write shared state ────────────────────────────
         with state_lock:
@@ -419,8 +502,8 @@ def serial_reader_thread():
             cable_length_left  = L_left
             cable_length_right = L_right
             camera_position[:] = [cam_x, 0.0, cam_z]
-            current_left       = il
-            current_right      = ir
+            current_left       = It * (t_left  / max(t_left + t_right, 1e-6))
+            current_right      = It * (t_right / max(t_left + t_right, 1e-6))
             tension_left       = t_left
             tension_right      = t_right
 
@@ -443,30 +526,28 @@ def run_mujoco():
 
         while viewer.is_running() and running:
 
-            dt = model.opt.timestep
-
             with state_lock:
-                pos    = camera_position.copy()
-                L_left = cable_length_left
-                L_right= cable_length_right
-                tL     = tension_left
-                tR     = tension_right
+                pos = camera_position.copy()
+                tL  = tension_left
+                tR  = tension_right
 
             # ── Drive mocap camera to computed position ────
             data.mocap_pos[camera_mocap_id]  = pos
             data.mocap_quat[camera_mocap_id] = [1.0, 0.0, 0.0, 0.0]
 
+            # ── Update cable colours from tension ─────────
+            model.tendon_rgba[left_tendon_id]  = tension_to_color(tL)
+            model.tendon_rgba[right_tendon_id] = tension_to_color(tR)
+
             mujoco.mj_forward(model, data)
 
             print(
                 f"[SIM] x={pos[0]:+.3f}  z={pos[2]:+.3f} | "
-                f"L_cable={L_left:.3f} m  R_cable={L_right:.3f} m | "
                 f"T_L={tL:.2f} N  T_R={tR:.2f} N"
             )
 
             viewer.sync()
-            time.sleep(dt)
-
+            time.sleep(model.opt.timestep)
     running = False
 
 
@@ -574,13 +655,9 @@ def run_status_window():
 # =========================================================
 
 def fake_motor_thread():
-    """
-    Simulates a camera following a horizontal sine path.
-    Computes the cable lengths for each point, converts to
-    step counts, and adds synthetic current noise.
-    """
-    global camera_position
+
     global cable_length_left, cable_length_right
+    global camera_position
     global current_left, current_right
     global tension_left, tension_right
     global steps_left, steps_right
@@ -592,38 +669,45 @@ def fake_motor_thread():
 
         t = time.perf_counter() - t0
 
-        # Simulated camera trajectory
-        x = 0.25 * np.sin(0.4 * t)
-        z = 0.25 + 0.07 * np.sin(0.9 * t)
+        # ── Target trajectory (used only to compute step counts) ──
+        x_target = 0.35 * np.sin(1.2 * t)
+        z_target = 0.25 + 0.08 * np.sin(2.8 * t)
 
-        # Cable lengths from geometry
-        LL = float(np.linalg.norm(np.array([x, z]) - anchor_L))
-        LR = float(np.linalg.norm(np.array([x, z]) - anchor_R))
+        # ── True cable lengths at target position ─────────
+        LL = np.linalg.norm(np.array([x_target, z_target]) - anchor_L)
+        LR = np.linalg.norm(np.array([x_target, z_target]) - anchor_R)
 
-        # Convert lengths to step counts
+        # ── Convert to step counts (only sensor output) ───
         sL = int(LL * STEPS_PER_METRE)
         sR = int(LR * STEPS_PER_METRE)
 
-        # Simulated motor current (roughly proportional to tension + noise)
-        base_current = 1.2 + 0.3 * np.sin(0.4 * t)
-        iL = base_current + 0.05 * np.random.randn()
-        iR = base_current + 0.05 * np.random.randn()
+        # ── From here identical to real hardware ──────────
+        L_left  = max(sL / STEPS_PER_METRE, 0.05)
+        L_right = max(sR / STEPS_PER_METRE, 0.05)
 
-        tL = np.clip(abs(iL) * CURRENT_TO_TENSION, TENSION_MIN, TENSION_MAX)
-        tR = np.clip(abs(iR) * CURRENT_TO_TENSION, TENSION_MIN, TENSION_MAX)
+        cam_x, cam_z = forward_kinematics(L_left, L_right)
+        cam_x = np.clip(cam_x, MIN_X, MAX_X)
+        cam_z = np.clip(cam_z, MIN_Z, MAX_Z)
+
+        # ── Simulate total current with noise ─────────────
+        I_total  = 1.2 + 0.3 * np.sin(0.3 * t)
+        I_total += 0.05 * np.random.randn()
+        I_total  = max(I_total, 0.0)
+
+        t_left, t_right = split_tension_by_angle(I_total, cam_x, cam_z)
 
         with state_lock:
             steps_left         = sL
             steps_right        = sR
-            cable_length_left  = LL
-            cable_length_right = LR
-            camera_position[:] = [x, 0.0, z]
-            current_left       = iL
-            current_right      = iR
-            tension_left       = tL
-            tension_right      = tR
+            cable_length_left  = L_left
+            cable_length_right = L_right
+            camera_position[:] = [cam_x, 0.0, cam_z]
+            current_left       = I_total * (t_left  / max(t_left + t_right, 1e-6))
+            current_right      = I_total * (t_right / max(t_left + t_right, 1e-6))
+            tension_left       = t_left
+            tension_right      = t_right
 
-        time.sleep(0.01)
+        time.sleep(0.02)
 
 
 # =========================================================
@@ -634,8 +718,8 @@ def fake_motor_thread():
 #   real hardware  → serial_reader_thread
 #   testing        → fake_motor_thread
 
-threading.Thread(target=serial_reader_thread, daemon=True).start()
-# threading.Thread(target=fake_motor_thread, daemon=True).start()
+# threading.Thread(target=serial_reader_thread, daemon=True).start()
+threading.Thread(target=fake_motor_thread, daemon=True).start()
 
 threading.Thread(target=run_mujoco, daemon=True).start()
 

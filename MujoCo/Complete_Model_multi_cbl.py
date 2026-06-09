@@ -194,7 +194,9 @@ data  = mujoco.MjData(model)
 camera_body_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "camera")
 camera_mocap_id = model.body_mocapid[camera_body_id]
 
-
+# ── Tendon IDs for colour updates ─────────────────────────
+left_tendon_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "left_cable")
+right_tendon_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "right_cable")
 # =========================================================
 # SHARED STATE
 # =========================================================
@@ -221,7 +223,7 @@ running = True
 
 MIN_X = -0.40
 MAX_X =  0.40
-MIN_Z =  0.10
+MIN_Z =  0.05
 MAX_Z =  0.45
 
 
@@ -307,13 +309,6 @@ def cable_angles(cam_x, cam_z):
     angle_R  = np.arccos(np.clip(np.dot(unit_R, vertical), -1, 1))
 
     return angle_L, angle_R, unit_L, unit_R
-
-# =========================================================
-# TENDON COLOUR IDS
-# =========================================================
-
-left_tendon_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "left_cable")
-right_tendon_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "right_cable")
 
 # =========================================================
 # TORQUE AND TENSION CALCULATION
