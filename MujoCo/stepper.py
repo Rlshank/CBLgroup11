@@ -306,7 +306,7 @@ running = True
 
 def tension_to_color(T):
 
-    T_MAX = 3.0
+    T_MAX = 0.05
     ratio = np.clip(T / T_MAX, 0.0, 1.0)
 
     if ratio < 0.25:
