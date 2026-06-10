@@ -20,7 +20,7 @@ import serial.tools.list_ports
 # =========================================================
 
 SERIAL_BAUD    = 115200
-SERIAL_PORT    = "COM4"      # Use your Arduino port, e.g. "COM4". Set to None for auto-detect.
+SERIAL_PORT    = "COM9"      # Use your Arduino port, e.g. "COM4". Set to None for auto-detect.
 SERIAL_TIMEOUT = 0.01
 
 
@@ -62,7 +62,7 @@ DAMPING = 0.05
 #
 # MuJoCo coordinates:
 #   sim_x = cam_x - 0.465
-#   sim_z = cam_y
+#   sim_y = cam_y
 # =========================================================
 
 SPAN = 0.93
@@ -368,14 +368,18 @@ def send_command(ser, d1, sp1, d2, sp2):
 
 def inv_to_sim_position(x_inv, y_inv):
     """
-    Convert INV_KIN position to MuJoCo position.
-    INV_KIN x range: 0 to 0.93
-    MuJoCo x range: -0.465 to +0.465
+    INV_KIN:
+        x = horizontal (left/right)
+        y = vertical (up/down)
+
+    MuJoCo:
+        x = horizontal (left/right)
+        z = vertical (up/down)
     """
     sim_x = x_inv - HALF_SPAN
-    sim_z = y_inv
+    sim_y = y_inv
 
-    return np.array([sim_x, 0.0, sim_z], dtype=float)
+    return np.array([sim_x, 0.0, sim_y], dtype=float)
 
 
 # =========================================================
@@ -813,7 +817,7 @@ def run_mujoco():
             mujoco.mj_forward(model, data)
 
             print(
-                f"[SIM] x={pos[0]:+.3f} z={pos[2]:+.3f} | "
+                f"[SIM] x={pos[0]:+.3f} y={pos[2]:+.3f} | "
                 f"L1={LL:.3f}m L2={LR:.3f}m | "
                 f"T_L={tL:.2f}N T_R={tR:.2f}N"
             )
@@ -920,7 +924,7 @@ def run_status_window():
             inv_y = cam_y
 
         pos_label.config(
-            text=f"MuJoCo pos:   x={pos[0]:+.3f} m   z={pos[2]:+.3f} m"
+            text=f"MuJoCo pos:   x={pos[0]:+.3f} m   y={pos[2]:+.3f} m"
         )
 
         inv_label.config(
