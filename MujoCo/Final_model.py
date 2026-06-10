@@ -77,13 +77,13 @@ anchor_R_sim = np.array([ HALF_SPAN, PULLEY_HEIGHT], dtype=float)
 
 # Home position in INV_KIN coordinates
 cam_x = HALF_SPAN
-cam_y = 0.05
+cam_y = 0
 
 # Movement limits in INV_KIN coordinates
 MIN_X = 0.0
 MAX_X = SPAN
-MIN_Y = 0.05
-MAX_Y = 0.45
+MIN_Y = 0
+MAX_Y = 0.5
 
 
 # =========================================================
@@ -512,30 +512,32 @@ def find_serial_port():
     return None
 
 
-def parse_inv_kin_line(line):
+def parse_arduino_line(line):
     """
     Expected Arduino line format:
-        DATA,rx,ry,current2_mA
+        POS,x,y,joy_x,joy_y,current_mA
 
     Example:
-        DATA,512,650,125.4
+        POS,0.1200,0.2500,420,0,0.0
     """
     line = line.strip()
 
-    if not line.startswith("DATA,"):
+    if not line.startswith("POS,"):
         return None
 
     try:
         parts = line.split(",")
 
-        if len(parts) < 4:
+        if len(parts) < 6:
             return None
 
-        rx = int(parts[1])
-        ry = int(parts[2])
-        current2_mA = float(parts[3])
+        x = float(parts[1])
+        y = float(parts[2])
+        joy_x = int(parts[3])
+        joy_y = int(parts[4])
+        current_mA = float(parts[5])
 
-        return rx, ry, current2_mA
+        return x, y, joy_x, joy_y, current_mA
 
     except ValueError:
         return None
@@ -545,14 +547,12 @@ def parse_inv_kin_line(line):
 # SERIAL + INV_KIN THREAD
 # =========================================================
 
-def inv_kin_serial_thread():
+def arduino_position_thread():
     global cam_x, cam_y
     global camera_position, velocity_xz, acceleration_xz
     global cable_length_left, cable_length_right
     global current_motor_2_mA
     global tension_left, tension_right
-    global step_delay_left, step_delay_right
-    global direction_left, direction_right
     global joystick_rx, joystick_ry
     global running
 
@@ -571,150 +571,74 @@ def inv_kin_serial_thread():
         print(f"[SERIAL] Could not connect to Arduino on {port}: {e}")
         return
 
-    prev_pos = inv_to_sim_position(cam_x, cam_y)
+    prev_pos = np.array([0.0, 0.0, 0.0], dtype=float)
     prev_vel = np.array([0.0, 0.0], dtype=float)
-
     last_time = time.perf_counter()
 
     while running:
-        loop_start = time.perf_counter()
-
         try:
             raw = ser.readline().decode(errors="ignore").strip()
-
         except serial.SerialException:
             print("[SERIAL] Read error")
             continue
 
-        parsed = parse_inv_kin_line(raw)
+        parsed = parse_arduino_line(raw)
 
         if parsed is None:
             continue
 
-        rx, ry, current2_mA = parsed
-
-        vx, vy = joystick_to_velocity(rx, ry)
+        arduino_x, arduino_y, joy_x, joy_y, current_mA = parsed
 
         now = time.perf_counter()
-        dt = max(now - last_time, CONTROL_DT)
+        dt = max(now - last_time, 0.001)
         last_time = now
 
-        if abs(vx) < 0.01 and abs(vy) < 0.01:
-            send_stop(ser)
+        # Arduino x is already centered: -0.465 to +0.465
+        sim_pos = np.array([arduino_x, 0.0, arduino_y], dtype=float)
 
-            pos_now = inv_to_sim_position(cam_x, cam_y)
+        # Convert to old INV_KIN coordinates only for cable length calculation
+        cam_x = arduino_x + HALF_SPAN
+        cam_y = arduino_y
 
-            tL, tR, vel_now, acc_now = calculate_dynamic_tension(
-                pos_now,
-                prev_pos,
-                prev_vel,
-                dt
-            )
-
-            with state_lock:
-                camera_position[:] = pos_now
-                velocity_xz[:] = vel_now
-                acceleration_xz[:] = acc_now
-
-                current_motor_2_mA = current2_mA
-
-                tension_left = tL
-                tension_right = tR
-
-                step_delay_left = 0
-                step_delay_right = 0
-
-                direction_left = 0
-                direction_right = 0
-
-                joystick_rx = rx
-                joystick_ry = ry
-
-            prev_pos = pos_now.copy()
-            prev_vel = vel_now.copy()
-
-            continue
-
-        old_l1, old_l2 = rope_lengths(cam_x, cam_y)
-
-        new_x = cam_x + vx * CONTROL_DT
-        new_y = cam_y + vy * CONTROL_DT
-
-        new_x = max(MIN_X, min(MAX_X, new_x))
-        new_y = max(MIN_Y, min(MAX_Y, new_y))
-
-        new_l1, new_l2 = rope_lengths(new_x, new_y)
-
-        l1_dot = (new_l1 - old_l1) / CONTROL_DT
-        l2_dot = (new_l2 - old_l2) / CONTROL_DT
-
-        sp1 = speed_to_delay(l1_dot)
-        sp2 = speed_to_delay(l2_dot)
-
-        d1 = 1 if l1_dot > 0 else 0
-        d2 = 1 if l2_dot > 0 else 0
-
-        send_command(ser, d1, sp1, d2, sp2)
-
-        cam_x = new_x
-        cam_y = new_y
-
-        pos_now = inv_to_sim_position(cam_x, cam_y)
+        l1, l2 = rope_lengths(cam_x, cam_y)
 
         tL, tR, vel_now, acc_now = calculate_dynamic_tension(
-            pos_now,
+            sim_pos,
             prev_pos,
             prev_vel,
-            CONTROL_DT
+            dt
         )
 
         with state_lock:
-            camera_position[:] = pos_now
+            camera_position[:] = sim_pos
             velocity_xz[:] = vel_now
             acceleration_xz[:] = acc_now
 
-            cable_length_left = new_l1
-            cable_length_right = new_l2
+            cable_length_left = l1
+            cable_length_right = l2
 
-            current_motor_2_mA = current2_mA
+            current_motor_2_mA = current_mA
 
             tension_left = tL
             tension_right = tR
 
-            step_delay_left = sp1
-            step_delay_right = sp2
+            joystick_rx = joy_x
+            joystick_ry = joy_y
 
-            direction_left = d1
-            direction_right = d2
-
-            joystick_rx = rx
-            joystick_ry = ry
-
-        prev_pos = pos_now.copy()
+        prev_pos = sim_pos.copy()
         prev_vel = vel_now.copy()
 
         print(
-            f"[INV_KIN] joystick=({rx},{ry}) | "
-            f"INV pos=({cam_x:.3f},{cam_y:.3f}) | "
-            f"SIM pos=({pos_now[0]:+.3f},{pos_now[2]:+.3f}) | "
-            f"L1={new_l1:.3f} L2={new_l2:.3f} | "
-            f"sp1={sp1}us sp2={sp2}us | "
+            f"[ARDUINO] x={arduino_x:+.3f} y={arduino_y:+.3f} | "
+            f"L1={l1:.3f} L2={l2:.3f} | "
             f"T_L={tL:.2f}N T_R={tR:.2f}N | "
-            f"I2={current2_mA:.2f}mA"
+            f"I={current_mA:.2f}mA"
         )
 
-        elapsed = time.perf_counter() - loop_start
-
-        if elapsed < CONTROL_DT:
-            time.sleep(CONTROL_DT - elapsed)
-
     try:
-        send_stop(ser)
         ser.close()
-
     except Exception:
         pass
-
 
 # =========================================================
 # FAKE TEST THREAD WITHOUT ARDUINO
@@ -877,7 +801,7 @@ def run_status_window():
 
         with state_lock:
             cam_x = HALF_SPAN
-            cam_y = 0.05
+            cam_y = 0
 
             camera_position[:] = inv_to_sim_position(cam_x, cam_y)
             velocity_xz[:] = [0.0, 0.0]
@@ -973,7 +897,7 @@ def run_status_window():
 if __name__ == "__main__":
 
     # Use real Arduino / joystick:
-    threading.Thread(target=inv_kin_serial_thread, daemon=True).start()
+    threading.Thread(target=arduino_position_thread, daemon=True).start()
 
     # For testing without Arduino, comment the line above and uncomment this:
     # threading.Thread(target=fake_inv_kin_thread, daemon=True).start()
