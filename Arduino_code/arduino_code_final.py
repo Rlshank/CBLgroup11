@@ -1,44 +1,129 @@
-#include <Wire.h>
-#include <INA3221.h>
+#include <math.h>
 
-INA3221 ina3221(0x40);
+// ===================================================
+// Smooth inverse velocity kinematics
+// 2-cable system, 93 cm wide, 50 cm high
+//
+// Coordinate system:
+// x = -46.5 cm to +46.5 cm
+// y = 0 cm to 50 cm
+//
+// Start position:
+// x = 0, y = 0
+// ===================================================
 
-// =======================
-// Pin settings
-// =======================
-#define JOY_X A1
-#define JOY_Y A0
+// =========================
+// Joystick pins
+// =========================
+#define PIN_A0 A0
+#define PIN_A1 A1
 
+// =========================
+// Motor pins
+// =========================
+// Motor 1 = left motor
 #define STEP1 8
 #define DIR1 7
 
+// Motor 2 = right motor
 #define STEP2 3
 #define DIR2 4
 
-// INA channel that worked in your test
-#define INA_CHANNEL_1 0
+// =========================
+// Motor direction settings
+// =========================
+// These are your current working direction settings
+#define M1_WIND_IN HIGH
+#define M1_UNWIND  LOW
 
-// =======================
-// Motor variables
-// =======================
-int dir1 = 0;
-int dir2 = 0;
+#define M2_WIND_IN LOW
+#define M2_UNWIND  HIGH
 
-unsigned long delay1_us = 0;
-unsigned long delay2_us = 0;
+// =========================
+// Geometry in meters
+// =========================
+const float WIDTH = 0.93;
+const float HEIGHT = 0.50;
+const float HALF_WIDTH = WIDTH / 2.0;
 
+const float LEFT_X = -HALF_WIDTH;
+const float LEFT_Y = HEIGHT;
+
+const float RIGHT_X = HALF_WIDTH;
+const float RIGHT_Y = HEIGHT;
+
+// Estimated camera/weight position
+float camX = 0.0;
+float camY = 0.0;
+
+// Movement limits
+const float MIN_X = -HALF_WIDTH;
+const float MAX_X = HALF_WIDTH;
+const float MIN_Y = 0.0;
+const float MAX_Y = HEIGHT;
+
+// Set to false so Arduino does NOT stop at the edges.
+// Later the digital twin can block movement based on tension/current.
+const bool USE_POSITION_LIMITS = false;
+
+// =========================
+// Motor / spool settings
+// =========================
+const float SPOOL_RADIUS = 0.0125;   // 1.25 cm
+const int STEPS_PER_REV = 200;       // full step because MS pins are not connected
+
+const float CABLE_PER_STEP = (2.0 * PI * SPOOL_RADIUS) / STEPS_PER_REV;
+
+// =========================
+// Control settings
+// =========================
+const int DEADZONE = 200;
+
+// Movement speed in m/s
+// 0.10 = 10 cm/s
+const float MOVE_SPEED = 0.15;
+
+// Higher value = slower but smoother/less skipping
+const unsigned long MIN_STEP_INTERVAL_US = 1200;
+
+// =========================
+// Joystick center values
+// =========================
+int centerA0 = 512;
+int centerA1 = 512;
+
+// =========================
+// Step timing
+// =========================
 unsigned long lastStep1 = 0;
 unsigned long lastStep2 = 0;
 
-bool stepState1 = LOW;
-bool stepState2 = LOW;
+unsigned long interval1 = 999999;
+unsigned long interval2 = 999999;
 
-// =======================
-// Timing for sending sensor data
-// =======================
-unsigned long lastSend = 0;
-const unsigned long SEND_INTERVAL = 50;  // ms
+bool motor1Active = false;
+bool motor2Active = false;
 
+unsigned long lastLoopTime = 0;
+
+// =========================
+// Functions
+// =========================
+float ropeLength(float x, float y, float anchorX, float anchorY) {
+  float dx = x - anchorX;
+  float dy = y - anchorY;
+  return sqrt(dx * dx + dy * dy);
+}
+
+void stepMotor(int stepPin) {
+  digitalWrite(stepPin, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(stepPin, LOW);
+}
+
+// =========================
+// Setup
+// =========================
 void setup() {
   Serial.begin(115200);
 
@@ -51,97 +136,173 @@ void setup() {
   digitalWrite(STEP1, LOW);
   digitalWrite(STEP2, LOW);
 
-  Wire.begin();
-  ina3221.begin();
+  // Calibrate joystick center
+  // Do not touch the joystick during startup
+  long sumA0 = 0;
+  long sumA1 = 0;
 
-  delay(1000);
+  for (int i = 0; i < 100; i++) {
+    sumA0 += analogRead(PIN_A0);
+    sumA1 += analogRead(PIN_A1);
+    delay(5);
+  }
 
-  Serial.println("READY");
-}
+  centerA0 = sumA0 / 100;
+  centerA1 = sumA1 / 100;
 
-void loop() {
-  readPythonCommand();
-  moveMotors();
-  sendDataToPython();
-}
+  lastLoopTime = micros();
 
-void readPythonCommand() {
-  if (Serial.available()) {
-    String line = Serial.readStringUntil('\n');
-    line.trim();
+  Serial.println("Arduino inverse kinematics started");
+  Serial.print("Center A0 = ");
+  Serial.println(centerA0);
+  Serial.print("Center A1 = ");
+  Serial.println(centerA1);
+  Serial.println("Start position: X = 0 cm, Y = 0 cm");
 
-    int values[4];
-    int index = 0;
-
-    char buffer[40];
-    line.toCharArray(buffer, 40);
-
-    char *token = strtok(buffer, ",");
-
-    while (token != NULL && index < 4) {
-      values[index] = atoi(token);
-      index++;
-      token = strtok(NULL, ",");
-    }
-
-    if (index == 4) {
-      dir1 = values[0];
-      delay1_us = values[1];
-
-      dir2 = values[2];
-      delay2_us = values[3];
-
-      digitalWrite(DIR1, dir1);
-      digitalWrite(DIR2, dir2);
-    }
+  if (USE_POSITION_LIMITS) {
+    Serial.println("Position limits: ON");
+  } else {
+    Serial.println("Position limits: OFF");
   }
 }
 
-void moveMotors() {
+// =========================
+// Main loop
+// =========================
+void loop() {
   unsigned long now = micros();
 
-  // Motor 1
-  if (delay1_us > 0) {
-    if (now - lastStep1 >= delay1_us) {
-      lastStep1 = now;
-      stepState1 = !stepState1;
-      digitalWrite(STEP1, stepState1);
+  float dt = (now - lastLoopTime) / 1000000.0;
+  lastLoopTime = now;
+
+  // =========================
+  // Read joystick
+  // =========================
+  int rawA0 = analogRead(PIN_A0) - centerA0;
+  int rawA1 = analogRead(PIN_A1) - centerA1;
+
+  // Correct joystick mapping from your tests
+  int xValue = -rawA0;
+  int yValue = -rawA1;
+
+  float vx = 0.0;
+  float vy = 0.0;
+
+  // Only allow one direction at a time
+  if (abs(xValue) > abs(yValue) && abs(xValue) > DEADZONE) {
+    if (xValue > 0) {
+      vx = MOVE_SPEED;      // right
+    } else {
+      vx = -MOVE_SPEED;     // left
     }
-  } else {
-    digitalWrite(STEP1, LOW);
-    stepState1 = LOW;
+  } 
+  else if (abs(yValue) > DEADZONE) {
+    if (yValue > 0) {
+      vy = MOVE_SPEED;      // up
+    } else {
+      vy = -MOVE_SPEED;     // down
+    }
   }
 
-  // Motor 2
-  if (delay2_us > 0) {
-    if (now - lastStep2 >= delay2_us) {
-      lastStep2 = now;
-      stepState2 = !stepState2;
-      digitalWrite(STEP2, stepState2);
-    }
-  } else {
-    digitalWrite(STEP2, LOW);
-    stepState2 = LOW;
+  // =========================
+  // Optional software limits
+  // =========================
+  if (USE_POSITION_LIMITS) {
+    if (camX <= MIN_X && vx < 0) vx = 0;
+    if (camX >= MAX_X && vx > 0) vx = 0;
+    if (camY <= MIN_Y && vy < 0) vy = 0;
+    if (camY >= MAX_Y && vy > 0) vy = 0;
   }
-}
 
-void sendDataToPython() {
-  unsigned long now = millis();
+  // =========================
+  // Inverse velocity kinematics
+  // =========================
+  float L1 = ropeLength(camX, camY, LEFT_X, LEFT_Y);
+  float L2 = ropeLength(camX, camY, RIGHT_X, RIGHT_Y);
 
-  if (now - lastSend >= SEND_INTERVAL) {
-    lastSend = now;
+  // Cable speed in m/s
+  float dL1dt = ((camX - LEFT_X) * vx + (camY - LEFT_Y) * vy) / L1;
+  float dL2dt = ((camX - RIGHT_X) * vx + (camY - RIGHT_Y) * vy) / L2;
 
-    int rx = analogRead(JOY_X);
-    int ry = analogRead(JOY_Y);
+  // Motor 1 direction
+  if (dL1dt < 0) {
+    digitalWrite(DIR1, M1_WIND_IN);
+  } else {
+    digitalWrite(DIR1, M1_UNWIND);
+  }
 
-    float current_A = ina3221.getCurrent(INA_CHANNEL_1);
-    float current_mA = current_A * 1000.0;
+  // Motor 2 direction
+  if (dL2dt < 0) {
+    digitalWrite(DIR2, M2_WIND_IN);
+  } else {
+    digitalWrite(DIR2, M2_UNWIND);
+  }
 
-    Serial.print("DATA,");
-    Serial.print(rx);
+  // Convert cable speed to step frequency
+  float freq1 = fabs(dL1dt) / CABLE_PER_STEP;
+  float freq2 = fabs(dL2dt) / CABLE_PER_STEP;
+
+  if (freq1 > 1.0) {
+    interval1 = 1000000.0 / freq1;
+    if (interval1 < MIN_STEP_INTERVAL_US) interval1 = MIN_STEP_INTERVAL_US;
+    motor1Active = true;
+  } else {
+    motor1Active = false;
+  }
+
+  if (freq2 > 1.0) {
+    interval2 = 1000000.0 / freq2;
+    if (interval2 < MIN_STEP_INTERVAL_US) interval2 = MIN_STEP_INTERVAL_US;
+    motor2Active = true;
+  } else {
+    motor2Active = false;
+  }
+
+  // =========================
+  // Generate step pulses
+  // =========================
+  now = micros();
+
+  if (motor1Active && now - lastStep1 >= interval1) {
+    lastStep1 = now;
+    stepMotor(STEP1);
+  }
+
+  if (motor2Active && now - lastStep2 >= interval2) {
+    lastStep2 = now;
+    stepMotor(STEP2);
+  }
+
+  // =========================
+  // Update estimated position
+  // =========================
+  camX += vx * dt;
+  camY += vy * dt;
+
+  // Only constrain position if limits are enabled
+  if (USE_POSITION_LIMITS) {
+    camX = constrain(camX, MIN_X, MAX_X);
+    camY = constrain(camY, MIN_Y, MAX_Y);
+  }
+
+  // =========================
+  // Send data to Python
+  // Format:
+  // POS,x,y,joystick_x,joystick_y,current_mA
+  // =========================
+  static unsigned long lastSend = 0;
+  if (millis() - lastSend > 50) {
+    lastSend = millis();
+
+    Serial.print("POS,");
+    Serial.print(camX, 4);
     Serial.print(",");
-    Serial.print(ry);
+    Serial.print(camY, 4);
     Serial.print(",");
-    Serial.println(current_mA, 2);
+    Serial.print(xValue);
+    Serial.print(",");
+    Serial.print(yValue);
+    Serial.print(",");
+    Serial.println(0.0);   // Current placeholder for now
   }
 }
