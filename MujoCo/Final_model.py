@@ -77,7 +77,7 @@ anchor_R_sim = np.array([ HALF_SPAN, PULLEY_HEIGHT], dtype=float)
 
 # Home position in INV_KIN coordinates
 cam_x = HALF_SPAN
-cam_y = 0
+cam_y = 0.05
 
 # Movement limits in INV_KIN coordinates
 MIN_X = 0.0
@@ -314,6 +314,9 @@ data  = mujoco.MjData(model)
 camera_body_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "camera")
 camera_mocap_id = model.body_mocapid[camera_body_id]
 
+# ── Tendon IDs for colour updates ─────────────────────────
+left_tendon_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "left_cable")
+right_tendon_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "right_cable")
 
 # =========================================================
 # INV_KIN FUNCTIONS
@@ -452,6 +455,40 @@ def calculate_dynamic_tension(pos_now, pos_prev, vel_prev, dt):
 
     return tL, tR, vel_now, acc
 
+# =========================================================
+# TENSION TO COLOUR
+# =========================================================
+
+def tension_to_color(T):
+
+    T_MAX = 3.0
+    ratio = np.clip(T / T_MAX, 0.0, 1.0)
+
+    if ratio < 0.25:
+        t     = ratio / 0.25
+        red   = 0.0
+        green = t
+        blue  = 1.0 - t
+
+    elif ratio < 0.50:
+        t     = (ratio - 0.25) / 0.25
+        red   = t
+        green = 1.0
+        blue  = 0.0
+
+    elif ratio < 0.75:
+        t     = (ratio - 0.50) / 0.25
+        red   = 1.0
+        green = 1.0 - 0.35 * t
+        blue  = 0.0
+
+    else:
+        t     = (ratio - 0.75) / 0.25
+        red   = 1.0
+        green = 0.65 * (1.0 - t)
+        blue  = 0.0
+
+    return np.array([red, green, blue, 1.0])
 
 # =========================================================
 # SHARED STATE
@@ -726,17 +763,22 @@ def run_mujoco():
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
 
+        
         while viewer.is_running() and running:
 
             with state_lock:
                 pos = camera_position.copy()
-                LL = cable_length_left
-                LR = cable_length_right
-                tL = tension_left
-                tR = tension_right
+                LL  = cable_length_left
+                LR  = cable_length_right
+                tL  = tension_left
+                tR  = tension_right
 
-            data.mocap_pos[camera_mocap_id] = pos
+            data.mocap_pos[camera_mocap_id]  = pos
             data.mocap_quat[camera_mocap_id] = [1.0, 0.0, 0.0, 0.0]
+
+            # ── Update cable colours from tension ─────────
+            model.tendon_rgba[left_tendon_id]  = tension_to_color(tL)
+            model.tendon_rgba[right_tendon_id] = tension_to_color(tR)
 
             mujoco.mj_forward(model, data)
 
