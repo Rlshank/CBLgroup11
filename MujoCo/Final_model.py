@@ -2,14 +2,13 @@
 # camera_support_sim.py
 # Digital twin – Arduino sends position + tension directly
 # Rope lengths calculated from position geometry
-# Tension warning popup + joystick scaling feedback
-# Boundary warning when camera near limits
+# Tension warning label + joystick scaling feedback
+# Boundary warning label when camera near limits
 # =========================================================
 
 import time
 import threading
 import tkinter as tk
-from tkinter import messagebox
 import math
 import numpy as np
 import mujoco
@@ -335,39 +334,8 @@ speed_scale        = 1.0    # sent back to Arduino
 
 running            = True
 
-# ── Popup state (prevent spam) ────────────────────────────
-tension_popup_shown   = False
-tension_popup_lock    = threading.Lock()
-
-boundary_popup_shown  = False
-boundary_popup_lock   = threading.Lock()
-
-
-# =========================================================
-# POPUP HELPERS  (called from GUI thread via root.after)
-# =========================================================
-
-def show_tension_popup(root):
-    global tension_popup_shown
-    messagebox.showwarning(
-        "Tension Warning",
-        "⚠ Cable tension is too high!\n\n"
-        "Joystick input has been reduced.\n"
-        "Move the camera back towards the centre."
-    )
-    with tension_popup_lock:
-        tension_popup_shown = False
-
-
-def show_boundary_popup(root, msg):
-    global boundary_popup_shown
-    messagebox.showwarning(
-        "Boundary Warning",
-        f"{msg}\n\nCamera is within 5 cm of the movement limit.\n"
-        "Please move away from the boundary."
-    )
-    with boundary_popup_lock:
-        boundary_popup_shown = False
+# Warning messages are now shown as labels in the Tkinter window.
+# No pop-up/messagebox warnings are used.
 
 
 # =========================================================
@@ -646,7 +614,7 @@ def run_status_window():
 
     root = tk.Tk()
     root.title("Digital Twin – Cable Camera")
-    root.geometry("520x460")
+    root.geometry("560x500")
 
     tk.Label(root, text="Cable Camera Digital Twin",
              font=("Arial", 14, "bold")).pack(pady=8)
@@ -674,17 +642,37 @@ def run_status_window():
                              font=("Courier", 10))
     joy_label.pack(pady=3)
 
-    # ── Warning label (boundary + tension) ───────────────
-    warn_label    = tk.Label(root, text="",
-                             font=("Courier", 10),
-                             fg="red")
-    warn_label.pack(pady=3)
+    # ── Warning labels (no pop-ups) ──────────────────────
+    tension_warn_label = tk.Label(
+        root,
+        text="",
+        font=("Courier", 10, "bold"),
+        fg="red",
+        wraplength=520,
+        justify="center"
+    )
+    tension_warn_label.pack(pady=4)
+
+    boundary_warn_label = tk.Label(
+        root,
+        text="",
+        font=("Courier", 10, "bold"),
+        fg="red",
+        wraplength=520,
+        justify="center"
+    )
+    boundary_warn_label.pack(pady=4)
 
     def reset_position():
+        global cable_length_left, cable_length_right, tension_left, tension_right, speed_scale
+
         with state_lock:
             camera_position[:] = inv_to_sim_position(HALF_SPAN, 0.05)
-            cable_length_left,  \
-            cable_length_right  = rope_lengths(HALF_SPAN, 0.05)
+            cable_length_left, cable_length_right = rope_lengths(HALF_SPAN, 0.05)
+            tension_left = 0.0
+            tension_right = 0.0
+            speed_scale = 1.0
+
         print("[SIM] Reset to home.")
 
     tk.Button(root, text="Reset / Zero Position",
@@ -692,8 +680,6 @@ def run_status_window():
 
     # ── Polling update ────────────────────────────────────
     def update_labels():
-
-        global tension_popup_shown, boundary_popup_shown
 
         with state_lock:
             pos   = camera_position.copy()
@@ -732,26 +718,39 @@ def run_status_window():
             text=f"Joystick:  rx={rx}   ry={ry}"
         )
 
-        # ── Tension popup ─────────────────────────────────
-        # Show once when either cable goes red
+        # ── Tension warning label ─────────────────────────
+        # This replaces the old pop-up warning.
         if max(tL, tR) >= TENSION_RED_N:
-            with tension_popup_lock:
-                if not tension_popup_shown:
-                    tension_popup_shown = True
-                    root.after(10, lambda: show_tension_popup(root))
+            tension_warn_label.config(
+                text=(
+                    "⚠ Cable tension is too high! "
+                    "Joystick input has been reduced. "
+                    "Move the camera back towards the centre."
+                )
+            )
+        elif max(tL, tR) >= TENSION_WARN_N:
+            tension_warn_label.config(
+                text=(
+                    "⚠ Cable tension is getting high. "
+                    "Joystick speed is being reduced."
+                )
+            )
+        else:
+            tension_warn_label.config(text="")
 
-        # ── Boundary warnings ─────────────────────────────
+        # ── Boundary warning label ────────────────────────
+        # This replaces the old boundary pop-up.
         bwarns = boundary_warnings(pos)
 
         if bwarns:
-            warn_label.config(text="  ".join(bwarns))
-            with boundary_popup_lock:
-                if not boundary_popup_shown:
-                    boundary_popup_shown = True
-                    msg = "\n".join(bwarns)
-                    root.after(10, lambda m=msg: show_boundary_popup(root, m))
+            boundary_warn_label.config(
+                text=(
+                    "  ".join(bwarns)
+                    + "  |  Camera is within 5 cm of the movement limit."
+                )
+            )
         else:
-            warn_label.config(text="")
+            boundary_warn_label.config(text="")
 
         if running:
             root.after(50, update_labels)
