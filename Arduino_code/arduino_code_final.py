@@ -246,9 +246,18 @@ void loop() {
 
   float dt = (now - lastLoopTime) / 1000000.0;
   lastLoopTime = now;
-
+  
   if (dt > 0.1) {
     dt = 0.1;
+  }
+
+  static float joystickScale = 1.0;
+
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+  if (cmd.startsWith("S")) {
+    joystickScale = cmd.substring(1).toFloat();
+  }
   }
 
   // =========================
@@ -279,8 +288,8 @@ void loop() {
   }
 
   // Desired camera velocity
-  float vx = xJoy * MOVE_SPEED;
-  float vy = yJoy * MOVE_SPEED;
+  float vx = xJoy * MOVE_SPEED *joystickScale;
+  float vy = yJoy * MOVE_SPEED *joystickScale;
 
   // =========================
   // Software position limits

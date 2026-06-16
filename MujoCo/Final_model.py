@@ -54,7 +54,7 @@ BOUNDARY_WARN_MARGIN = 0.05   # metres – warn when within 5 cm of limit
 
 SPAN          = 0.93
 HALF_SPAN     = SPAN / 2.0
-PULLEY_HEIGHT = 0.50
+PULLEY_HEIGHT = 0.505
 
 ax1, ay1 = 0.0,  PULLEY_HEIGHT
 ax2, ay2 = SPAN, PULLEY_HEIGHT
@@ -384,8 +384,8 @@ def parse_arduino_line(line):
 
         x         = float(parts[1])
         y         = float(parts[2])
-        joy_x     = int(parts[3])
-        joy_y     = int(parts[4])
+        joy_x     = float(parts[3])
+        joy_y     = float(parts[4])
         tension_l = float(parts[5])
         tension_r = float(parts[6])
 
@@ -772,10 +772,10 @@ def run_status_window():
 if __name__ == "__main__":
 
     # Real Arduino:
-    #threading.Thread(target=arduino_position_thread, daemon=True).start()
+    threading.Thread(target=arduino_position_thread, daemon=True).start()
 
     # Testing without Arduino — comment above and uncomment below:
-    threading.Thread(target=fake_inv_kin_thread, daemon=True).start()
+    #threading.Thread(target=fake_inv_kin_thread, daemon=True).start()
 
     threading.Thread(target=run_mujoco, daemon=True).start()
 
