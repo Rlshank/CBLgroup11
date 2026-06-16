@@ -145,6 +145,11 @@ float ropeLength(float x, float y, float anchorX, float anchorY) {
   return sqrt(dx * dx + dy * dy);
 }
 
+float convertForceToOutput(float force_N) {
+  float torque = force_N * 0.055;
+  return torque / 0.012;
+}
+
 void stepMotor(int stepPin) {
   digitalWrite(stepPin, HIGH);
   delayMicroseconds(5);
@@ -444,8 +449,8 @@ void loop() {
     Serial.print(",");
     Serial.print(yJoy, 3);
     Serial.print(",");
-    Serial.print(force1_N, 3);
+    Serial.print(convertForceToOutput(force1_N), 3);
     Serial.print(",");
-    Serial.println(force2_N, 3);
+    Serial.println(convertForceToOutput(force2_N), 3); 
   }
 }
