@@ -37,8 +37,8 @@ TENSION_MIN = 0.0
 TENSION_MAX = 50.0
 
 # Tension thresholds
-TENSION_WARN_N  = 1.75    # N – start reducing joystick speed
-TENSION_RED_N   = 2.0    # N – cable turns red, show popup
+TENSION_WARN_N  = 0.7    # N – start reducing joystick speed
+TENSION_RED_N   = 1.3    # N – cable turns red, show popup
 
 
 # =========================================================
@@ -389,7 +389,7 @@ def parse_arduino_line(line):
         tension_l = float(parts[5])
         tension_r = float(parts[6])
 
-        return x, y, joy_x, joy_y, tension_l, tension_r
+        return x, y, joy_x, joy_y, tension_r, tension_l
 
     except ValueError:
         return None
