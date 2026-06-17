@@ -21,8 +21,8 @@ import serial.tools.list_ports
 # SERIAL CONFIG
 # =========================================================
 
-SERIAL_BAUD = 115200
-SERIAL_PORT = "COM9"
+SERIAL_BAUD    = 115200
+SERIAL_PORT    = "COM9"
 SERIAL_TIMEOUT = 0.01
 
 
@@ -31,14 +31,14 @@ SERIAL_TIMEOUT = 0.01
 # =========================================================
 
 CAMERA_MASS = 0.20
-GRAVITY = 9.81
+GRAVITY     = 9.81
 
 TENSION_MIN = 0.0
 TENSION_MAX = 50.0
 
 # Tension thresholds
-TENSION_WARN_N = 0.7    # N – start reducing joystick speed
-TENSION_RED_N = 1.3    # N – cable turns red, show popup
+TENSION_WARN_N  = 2.8    # N – start reducing joystick speed
+TENSION_RED_N   = 3.6  # N – cable turns red, show popup
 
 
 # =========================================================
@@ -52,21 +52,21 @@ BOUNDARY_WARN_MARGIN = 0.05   # metres – warn when within 5 cm of limit
 # GEOMETRY
 # =========================================================
 
-SPAN = 0.93
-HALF_SPAN = SPAN / 2.0
+SPAN          = 0.93
+HALF_SPAN     = SPAN / 2.0
 PULLEY_HEIGHT = 0.505
 
 ax1, ay1 = 0.0,  PULLEY_HEIGHT
 ax2, ay2 = SPAN, PULLEY_HEIGHT
 
 anchor_L_sim = np.array([-HALF_SPAN, PULLEY_HEIGHT], dtype=float)
-anchor_R_sim = np.array([HALF_SPAN, PULLEY_HEIGHT], dtype=float)
+anchor_R_sim = np.array([ HALF_SPAN, PULLEY_HEIGHT], dtype=float)
 
 # Movement limits in MuJoCo coordinates
 MIN_X_SIM = -HALF_SPAN
-MAX_X_SIM = HALF_SPAN
-MIN_Z_SIM = 0.0
-MAX_Z_SIM = PULLEY_HEIGHT
+MAX_X_SIM =  HALF_SPAN
+MIN_Z_SIM =  0.0
+MAX_Z_SIM =  PULLEY_HEIGHT
 
 # Home position in INV_KIN coordinates
 cam_x = HALF_SPAN
@@ -217,15 +217,13 @@ xml = r"""
 # =========================================================
 
 model = mujoco.MjModel.from_xml_string(xml)
-data = mujoco.MjData(model)
+data  = mujoco.MjData(model)
 
-camera_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "camera")
+camera_body_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "camera")
 camera_mocap_id = model.body_mocapid[camera_body_id]
 
-left_tendon_id = mujoco.mj_name2id(
-    model, mujoco.mjtObj.mjOBJ_TENDON, "left_cable")
-right_tendon_id = mujoco.mj_name2id(
-    model, mujoco.mjtObj.mjOBJ_TENDON, "right_cable")
+left_tendon_id  = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "left_cable")
+right_tendon_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "right_cable")
 
 
 # =========================================================
@@ -254,19 +252,19 @@ def tension_to_color(T):
     ratio = np.clip(T / T_MAX, 0.0, 1.0)
 
     if ratio < 0.25:
-        t = ratio / 0.25
+        t     = ratio / 0.25
         red, green, blue = 0.0, t, 1.0 - t
 
     elif ratio < 0.50:
-        t = (ratio - 0.25) / 0.25
+        t     = (ratio - 0.25) / 0.25
         red, green, blue = t, 1.0, 0.0
 
     elif ratio < 0.75:
-        t = (ratio - 0.50) / 0.25
+        t     = (ratio - 0.50) / 0.25
         red, green, blue = 1.0, 1.0 - 0.35 * t, 0.0
 
     else:
-        t = (ratio - 0.75) / 0.25
+        t     = (ratio - 0.75) / 0.25
         red, green, blue = 1.0, 0.65 * (1.0 - t), 0.0
 
     return np.array([red, green, blue, 1.0])
@@ -325,16 +323,16 @@ def boundary_warnings(pos):
 
 state_lock = threading.Lock()
 
-camera_position = inv_to_sim_position(cam_x, cam_y)
-cable_length_left = 0.0
+camera_position    = inv_to_sim_position(cam_x, cam_y)
+cable_length_left  = 0.0
 cable_length_right = 0.0
-tension_left = 0.0
-tension_right = 0.0
-joystick_rx = 512
-joystick_ry = 512
-speed_scale = 1.0    # sent back to Arduino
+tension_left       = 0.0
+tension_right      = 0.0
+joystick_rx        = 512
+joystick_ry        = 512
+speed_scale        = 1.0    # sent back to Arduino
 
-running = True
+running            = True
 
 # Warning messages are now shown as labels in the Tkinter window.
 # No pop-up/messagebox warnings are used.
@@ -349,13 +347,12 @@ def find_serial_port():
         return SERIAL_PORT
 
     candidates = serial.tools.list_ports.comports()
-    keywords = ["cp210", "ch340", "ftdi", "arduino", "usb serial", "uart"]
+    keywords   = ["cp210", "ch340", "ftdi", "arduino", "usb serial", "uart"]
 
     for port in candidates:
         desc = (port.description + port.hwid).lower()
         if any(k in desc for k in keywords):
-            print(
-                f"[SERIAL] Auto-detected: {port.device} ({port.description})")
+            print(f"[SERIAL] Auto-detected: {port.device} ({port.description})")
             return port.device
 
     if candidates:
@@ -385,14 +382,14 @@ def parse_arduino_line(line):
         if len(parts) < 7:
             return None
 
-        x = float(parts[1])
-        y = float(parts[2])
-        joy_x = float(parts[3])
-        joy_y = float(parts[4])
+        x         = float(parts[1])
+        y         = float(parts[2])
+        joy_x     = float(parts[3])
+        joy_y     = float(parts[4])
         tension_l = float(parts[5])
         tension_r = float(parts[6])
 
-        return x, y, joy_x, joy_y, tension_r, tension_l
+        return -x, y, joy_x, joy_y, tension_r, tension_l
 
     except ValueError:
         return None
@@ -439,6 +436,7 @@ def arduino_position_thread():
         parsed = parse_arduino_line(raw)
 
         if parsed is None:
+            print(f"[PARSE FAIL] raw={raw!r}")
             continue
 
         arduino_x, arduino_y, joy_x, joy_y, t_left, t_right = parsed
@@ -451,8 +449,8 @@ def arduino_position_thread():
         sim_pos = inv_to_sim_position(inv_x, inv_y)
 
         # ── Clamp tensions ────────────────────────────────
-        t_left = float(np.clip(t_left,  TENSION_MIN, TENSION_MAX))
-        t_right = float(np.clip(t_right, TENSION_MIN, TENSION_MAX))
+        t_left  = np.clip(abs(t_left),  TENSION_MIN, TENSION_MAX)
+        t_right = np.clip(abs(t_right), TENSION_MIN, TENSION_MAX)
 
         # ── Compute joystick scale from tension ───────────
         scale = tension_speed_scale(t_left, t_right)
@@ -470,16 +468,16 @@ def arduino_position_thread():
 
         # ── Write shared state ────────────────────────────
         with state_lock:
-            cam_x = inv_x
-            cam_y = inv_y
+            cam_x              = inv_x
+            cam_y              = inv_y
             camera_position[:] = sim_pos
-            cable_length_left = l1
+            cable_length_left  = l1
             cable_length_right = l2
-            tension_left = t_left
-            tension_right = t_right
-            joystick_rx = joy_x
-            joystick_ry = joy_y
-            speed_scale = scale
+            tension_left       = t_left
+            tension_right      = t_right
+            joystick_rx        = joy_x
+            joystick_ry        = joy_y
+            speed_scale        = scale
 
         print(
             f"[ARDUINO] x={arduino_x:+.3f} y={arduino_y:+.3f} | "
@@ -523,9 +521,9 @@ def fake_inv_kin_thread():
         l1, l2 = rope_lengths(inv_x, inv_y)
 
         # Static tension from geometry
-        cam = np.array([inv_x - HALF_SPAN, inv_y], dtype=float)
-        vec_L = anchor_L_sim - cam
-        vec_R = anchor_R_sim - cam
+        cam    = np.array([inv_x - HALF_SPAN, inv_y], dtype=float)
+        vec_L  = anchor_L_sim - cam
+        vec_R  = anchor_R_sim - cam
         unit_L = vec_L / max(np.linalg.norm(vec_L), 1e-6)
         unit_R = vec_R / max(np.linalg.norm(vec_R), 1e-6)
 
@@ -535,31 +533,31 @@ def fake_inv_kin_thread():
 
         try:
             tensions = np.linalg.solve(A, b)
-            t_left = float(np.clip(tensions[0], TENSION_MIN, TENSION_MAX))
+            t_left  = float(np.clip(tensions[0], TENSION_MIN, TENSION_MAX))
             t_right = float(np.clip(tensions[1], TENSION_MIN, TENSION_MAX))
         except np.linalg.LinAlgError:
-            t_left = 0.0
+            t_left  = 0.0
             t_right = 0.0
 
-        t_left += 0.02 * np.random.randn()
+        t_left  += 0.02 * np.random.randn()
         t_right += 0.02 * np.random.randn()
-        t_left = float(np.clip(t_left,  TENSION_MIN, TENSION_MAX))
+        t_left  = float(np.clip(t_left,  TENSION_MIN, TENSION_MAX))
         t_right = float(np.clip(t_right, TENSION_MIN, TENSION_MAX))
 
-        scale = tension_speed_scale(t_left, t_right)
+        scale   = tension_speed_scale(t_left, t_right)
         sim_pos = inv_to_sim_position(inv_x, inv_y)
 
         with state_lock:
-            cam_x = inv_x
-            cam_y = inv_y
+            cam_x              = inv_x
+            cam_y              = inv_y
             camera_position[:] = sim_pos
-            cable_length_left = l1
+            cable_length_left  = l1
             cable_length_right = l2
-            tension_left = t_left
-            tension_right = t_right
-            joystick_rx = 512
-            joystick_ry = 512
-            speed_scale = scale
+            tension_left       = t_left
+            tension_right      = t_right
+            joystick_rx        = 512
+            joystick_ry        = 512
+            speed_scale        = scale
 
         time.sleep(0.05)
 
@@ -572,7 +570,7 @@ def run_mujoco():
 
     global running
 
-    data.mocap_pos[camera_mocap_id] = camera_position.copy()
+    data.mocap_pos[camera_mocap_id]  = camera_position.copy()
     data.mocap_quat[camera_mocap_id] = [1.0, 0.0, 0.0, 0.0]
     mujoco.mj_forward(model, data)
 
@@ -582,15 +580,15 @@ def run_mujoco():
 
             with state_lock:
                 pos = camera_position.copy()
-                LL = cable_length_left
-                LR = cable_length_right
-                tL = tension_left
-                tR = tension_right
+                LL  = cable_length_left
+                LR  = cable_length_right
+                tL  = tension_left
+                tR  = tension_right
 
-            data.mocap_pos[camera_mocap_id] = pos
+            data.mocap_pos[camera_mocap_id]  = pos
             data.mocap_quat[camera_mocap_id] = [1.0, 0.0, 0.0, 0.0]
 
-            model.tendon_rgba[left_tendon_id] = tension_to_color(tL)
+            model.tendon_rgba[left_tendon_id]  = tension_to_color(tL)
             model.tendon_rgba[right_tendon_id] = tension_to_color(tR)
 
             mujoco.mj_forward(model, data)
@@ -625,24 +623,24 @@ def run_status_window():
     tk.Label(root, text="Position from Arduino  |  Tension from load cells",
              font=("Arial", 10)).pack(pady=2)
 
-    pos_label = tk.Label(root, text="Position:  ---",
-                         font=("Courier", 10))
+    pos_label     = tk.Label(root, text="Position:  ---",
+                             font=("Courier", 10))
     pos_label.pack(pady=3)
 
-    cable_label = tk.Label(root, text="Cables:    ---",
-                           font=("Courier", 10))
+    cable_label   = tk.Label(root, text="Cables:    ---",
+                             font=("Courier", 10))
     cable_label.pack(pady=3)
 
     tension_label = tk.Label(root, text="Tension:   ---",
                              font=("Courier", 10))
     tension_label.pack(pady=3)
 
-    scale_label = tk.Label(root, text="Joy scale: ---",
-                           font=("Courier", 10))
+    scale_label   = tk.Label(root, text="Joy scale: ---",
+                             font=("Courier", 10))
     scale_label.pack(pady=3)
 
-    joy_label = tk.Label(root, text="Joystick:  ---",
-                         font=("Courier", 10))
+    joy_label     = tk.Label(root, text="Joystick:  ---",
+                             font=("Courier", 10))
     joy_label.pack(pady=3)
 
     # ── Warning labels (no pop-ups) ──────────────────────
@@ -671,8 +669,7 @@ def run_status_window():
 
         with state_lock:
             camera_position[:] = inv_to_sim_position(HALF_SPAN, 0.05)
-            cable_length_left, cable_length_right = rope_lengths(
-                HALF_SPAN, 0.05)
+            cable_length_left, cable_length_right = rope_lengths(HALF_SPAN, 0.05)
             tension_left = 0.0
             tension_right = 0.0
             speed_scale = 1.0
@@ -686,14 +683,14 @@ def run_status_window():
     def update_labels():
 
         with state_lock:
-            pos = camera_position.copy()
-            LL = cable_length_left
-            LR = cable_length_right
-            tL = tension_left
-            tR = tension_right
+            pos   = camera_position.copy()
+            LL    = cable_length_left
+            LR    = cable_length_right
+            tL    = tension_left
+            tR    = tension_right
             scale = speed_scale
-            rx = joystick_rx
-            ry = joystick_ry
+            rx    = joystick_rx
+            ry    = joystick_ry
 
         # ── Update labels ─────────────────────────────────
         pos_label.config(
@@ -707,10 +704,10 @@ def run_status_window():
         )
 
         # Colour the scale label by severity
-        pct = int(scale * 100)
+        pct        = int(scale * 100)
         scale_color = (
-            "red" if scale == 0.0 else
-            "orange" if scale < 0.75 else
+            "red"        if scale == 0.0  else
+            "orange"     if scale < 0.75  else
             "dark green"
         )
         scale_label.config(
@@ -779,7 +776,7 @@ if __name__ == "__main__":
     threading.Thread(target=arduino_position_thread, daemon=True).start()
 
     # Testing without Arduino — comment above and uncomment below:
-    # threading.Thread(target=fake_inv_kin_thread, daemon=True).start()
+    #threading.Thread(target=fake_inv_kin_thread, daemon=True).start()
 
     threading.Thread(target=run_mujoco, daemon=True).start()
 

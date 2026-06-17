@@ -389,7 +389,7 @@ def parse_arduino_line(line):
         tension_l = float(parts[5])
         tension_r = float(parts[6])
 
-        return x, y, joy_x, joy_y, tension_r, tension_l
+        return -x, y, joy_x, joy_y, tension_r, tension_l
 
     except ValueError:
         return None
