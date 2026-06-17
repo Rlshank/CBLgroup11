@@ -41,7 +41,8 @@ HX711 loadCell1;
 HX711 loadCell2;
 
 // Calibration factor for both load cells
-const float LOADCELL_CALIBRATION_FACTOR = 2066.1638;
+const float LOADCELL_CALIBRATION_FACTOR_R = 2066;
+const float LOADCELL_CALIBRATION_FACTOR_L = 2066;
 
 // If your calibration was done with grams, keep this true
 const bool LOADCELL_OUTPUT_IS_GRAMS = true;
@@ -204,8 +205,8 @@ void setup() {
   loadCell1.begin(LOADCELL1_DOUT, LOADCELL1_SCK);
   loadCell2.begin(LOADCELL2_DOUT, LOADCELL2_SCK);
 
-  loadCell1.set_scale(LOADCELL_CALIBRATION_FACTOR);
-  loadCell2.set_scale(LOADCELL_CALIBRATION_FACTOR);
+  loadCell1.set_scale(LOADCELL_CALIBRATION_FACTOR_L);
+  loadCell2.set_scale(LOADCELL_CALIBRATION_FACTOR_R);
 
   // Important:
   // During tare, the load cells should be unloaded or at the chosen zero-tension state.
