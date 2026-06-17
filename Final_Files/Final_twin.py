@@ -22,7 +22,7 @@ import serial.tools.list_ports
 # =========================================================
 
 SERIAL_BAUD    = 115200
-SERIAL_PORT    = "COM9"
+SERIAL_PORT    = "COM4"
 SERIAL_TIMEOUT = 0.01
 
 
@@ -37,8 +37,8 @@ TENSION_MIN = 0.0
 TENSION_MAX = 50.0
 
 # Tension thresholds
-TENSION_WARN_N  = 2.8    # N – start reducing joystick speed
-TENSION_RED_N   = 3.6  # N – cable turns red, show popup
+TENSION_WARN_N  = 3.5  # N – start reducing joystick speed
+TENSION_RED_N   = 4.5  # N – cable turns red, show popup
 
 
 # =========================================================
@@ -700,7 +700,7 @@ def run_status_window():
             text=f"Cables:    L1={LL:.4f} m   L2={LR:.4f} m"
         )
         tension_label.config(
-            text=f"Tension:   T_L={tL:.2f} N   T_R={tR:.2f} N"
+            text=f"Tension:   T_R={tL:.2f} N   T_L={tR:.2f} N"
         )
 
         # Colour the scale label by severity

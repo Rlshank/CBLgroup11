@@ -42,7 +42,7 @@ HX711 loadCell2;
 
 // Calibration factor for both load cells
 const float LOADCELL_CALIBRATION_FACTOR_R = 2066;
-const float LOADCELL_CALIBRATION_FACTOR_L = 2066;
+const float LOADCELL_CALIBRATION_FACTOR_L = 1800;
 
 // If your calibration was done with grams, keep this true
 const bool LOADCELL_OUTPUT_IS_GRAMS = true;
