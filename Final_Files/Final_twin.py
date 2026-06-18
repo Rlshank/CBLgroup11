@@ -113,34 +113,46 @@ xml = r"""
         <body name="left_support" pos="-0.485 0 0">
             <geom type="box" pos="0 0 0.15"
                   size="0.016 0.02 0.15" rgba="0.52 0.40 0.25 1"/>
+
             <geom type="box" pos="-0.0015 0.015 0.40"
                   size="0.02 0.0015 0.10" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="-0.0015 -0.015 0.40"
                   size="0.02 0.0015 0.10" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="-0.065 0.015 0.33"
                   size="0.050 0.0015 0.02" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="-0.065 -0.015 0.33"
                   size="0.050 0.0015 0.02" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="-0.050 0.015 0.38"
                   euler="0 52 0" size="0.010 0.00075 0.0725"
                   rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="-0.050 -0.015 0.38"
-                  euler="0 -52 0" size="0.010 0.00075 0.0725"
+                  euler="0 52 0" size="0.010 0.00075 0.0725"
                   rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="-0.043 0 0.30"
                   size="0.07 0.10 0.01" rgba="0.9 0.8 0.9 1"/>
+
             <geom type="capsule" fromto="0 0 0.15 -0.09 0 0.29"
                   size="0.015" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="cylinder" size="0.01 0.01" rgba="0.5 0.5 0.5 1"/>
             <site name="left_pulley" pos="0 0 0.50"
                   size="0.01" rgba="0 0 1 1"/>
+
             <geom type="box" pos="-0.0655 0.0465 0.33"
                   size="0.02 0.03 0.02" rgba="0.1 0.1 0.1 1"/>
             <site name="left_motor_site" pos="-0.0655 0.0 0.33"
                   size="0.008" rgba="1 0 0 1"/>
+
             <geom type="cylinder" pos="-0.0655 0.0 0.33"
                   euler="90 0 0" size="0.03 0.01 0.03"
                   rgba="0.15 0.15 0.15 1"/>
+
             <geom type="cylinder" pos="0 0.0 0.485"
                   euler="90 0 0" size="0.0175 0.01 0.0175"
                   rgba="0.15 0.15 0.15 1"/>
@@ -150,34 +162,45 @@ xml = r"""
         <body name="right_support" pos="0.485 0 0">
             <geom type="box" pos="0 0 0.15"
                   size="0.016 0.02 0.15" rgba="0.52 0.40 0.25 1"/>
+
             <geom type="box" pos="0.0015 0.015 0.40"
                   size="0.02 0.0015 0.10" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="0.0015 -0.015 0.40"
                   size="0.02 0.0015 0.10" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="0.065 0.015 0.33"
                   size="0.050 0.0015 0.02" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="0.065 -0.015 0.33"
                   size="0.050 0.0015 0.02" rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="0.050 0.015 0.38"
                   euler="0 -52 0" size="0.010 0.00075 0.0725"
                   rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="0.050 -0.015 0.38"
                   euler="0 -52 0" size="0.010 0.00075 0.0725"
                   rgba="0.72 0.5 0.35 1"/>
+
             <geom type="box" pos="0.043 0 0.30"
                   size="0.07 0.10 0.01" rgba="0.9 0.8 0.9 1"/>
+
             <geom type="capsule" fromto="0 0 0.15 0.09 0 0.29"
                   size="0.015" rgba="0.72 0.5 0.35 1"/>
             <geom type="cylinder" size="0.01 0.01" rgba="0.5 0.5 0.5 1"/>
             <site name="right_pulley" pos="0 0 0.50"
                   size="0.01" rgba="0 0 1 1"/>
+
             <geom type="box" pos="0.0655 0.0465 0.33"
                   size="0.02 0.03 0.02" rgba="0.1 0.1 0.1 1"/>
             <site name="motor_site" pos="0.0655 0.0 0.33"
                   size="0.008" rgba="1 0 0 1"/>
+
             <geom type="cylinder" pos="0.0655 0.0 0.33"
                   euler="90 0 0" size="0.03 0.01 0.03"
                   rgba="0.15 0.15 0.15 1"/>
+
             <geom type="cylinder" pos="0 0.0 0.485"
                   euler="90 0 0" size="0.0175 0.01 0.0175"
                   rgba="0.15 0.15 0.15 1"/>
